@@ -1,0 +1,87 @@
+<?php
+
+/**
+ * @file
+ * Module file for DP: User.
+ */
+
+define('DP_USER_ROLE_ADMINISTRATOR', 'administrator');
+define('DP_USER_ROLE_PLATFORM_OWNER', 'platform owner');
+define('DP_USER_ROLE_CONTENT_EDITOR', 'content editor');
+define('DP_USER_ROLE_AUTHENTICATED_USER', 'authenticated user');
+define('DP_USER_ROLE_DEVELOPER', 'TG Developer');
+
+/**
+ * Implements hook_menu_alter().
+ */
+function dp_user_menu_alter(&$items) {
+  $items['admin/people/permissions/roles/edit/%user_role']['access callback'] = 'dp_user_user_role_edit_access';
+  $items['admin/people/permissions/roles/delete/%user_role']['access callback'] = 'dp_user_user_role_edit_access';
+}
+
+/**
+ * Custom menu access callback to prevent changes of custom roles.
+ *
+ * TODO Hide edit operations in theme_user_admin_roles() also.
+ */
+function dp_user_user_role_edit_access($role) {
+  $roles = _dp_user_get_custom_roles();
+  if (!in_array($role->rid, $roles)) {
+    return FALSE;
+  }
+  return user_role_edit_access($role);
+}
+
+/**
+ * Helper function which returns all custom roles provided by this module.
+ *
+ * @return string[]
+ *   Array of role names.
+ */
+function _dp_user_get_custom_roles() {
+  $roles = array(
+    DP_USER_ROLE_CONTENT_EDITOR,
+    DP_USER_ROLE_PLATFORM_OWNER,
+    DP_USER_ROLE_ADMINISTRATOR,
+	DP_USER_ROLE_AUTHENTICATED_USER,
+	DP_USER_ROLE_DEVELOPER,
+  );
+  return $roles;
+}
+
+/**
+ * Helper function which returns role ids of roles names.
+ *
+ * @param array $role_names
+ *   Array of Drupal role names.
+ *
+ * @return array
+ *   Array of role ids.
+ */
+function dp_user_get_rids_of_role_names($role_names = array()) {
+  $query = db_select('role', 'r');
+  $query->fields('r', array('rid'));
+  if (!empty($role_names)) {
+    $query->condition('name', $role_names, 'IN');
+  }
+  return $query->execute()->fetchCol();
+}
+
+/**
+ * Helper function which returns users roles by names.
+ *
+ * @param array $role_names
+ *   Array of Drupal role names.
+ *
+ * @return stdClass[]
+ *   Array of user roles.
+ */
+function dp_user_roles_load_by_names($role_names = array()) {
+  $query = db_select('role', 'r');
+  $query->fields('r');
+  if (!empty($role_names)) {
+    $query->condition('name', $role_names, 'IN');
+  }
+  return $query->execute()
+    ->fetchObject();
+}

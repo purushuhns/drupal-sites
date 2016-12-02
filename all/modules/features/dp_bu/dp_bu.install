@@ -1,0 +1,19 @@
+<?php
+
+/**
+ * @file
+ * Install, update and uninstall functions for the DP: Business Unit module.
+ */
+
+/**
+ * Implements hook_install().
+ *
+ * @see dp_bu_modules_installed()
+ */
+function dp_bu_install() {
+  // Close commenting on Business Unit nodes, without storing unnecessary
+  // variables and depending on comment.module.
+  if (module_exists('comment')) {
+    variable_set('comment_business_unit', COMMENT_NODE_CLOSED);
+  }
+}

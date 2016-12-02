@@ -1,0 +1,5 @@
+name = DP: Hacks
+description = Hacks for DP.
+package = DP
+core = 7.x
+version = 7.x-1.x

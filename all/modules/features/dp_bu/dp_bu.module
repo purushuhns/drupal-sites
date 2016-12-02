@@ -1,0 +1,484 @@
+<?php
+
+/**
+ * @file
+ * Module file for the DP: Business Unit.
+ */
+
+include_once 'dp_bu.features.inc';
+
+define('DP_BU_OG_ROLE_PRODUCT_MANAGER', 'product manager');
+define('DP_BU_OG_ROLE_API_DEVELOPER', 'API developer');
+define('DP_BU_OG_ROLE_PARTNER', 'partner');
+define('DP_BU_EDGE_ATTR_BU_NAME', 'BU_Name');
+define('DP_BU_EDGE_ATTR_PRODUCT_VISIBILITY', 'Product_Visibility');
+define('DP_BU_OG_ROLE_APP_DEVELOPER', 'App Developer');
+
+/**
+ * Implements hook_modules_installed().
+ */
+function dp_bu_modules_installed($modules) {
+  if (in_array('dp_bu', $modules)) {
+    // All caches needs to be cleared first to ensure OG roles are getting
+    // created when this feature is reverted.
+    drupal_flush_all_caches();
+    features_revert_module('dp_bu');
+
+    // Grant default permissions for default OG roles.
+    $business_unit_roles = og_roles('node', 'business_unit');
+    $og_permissions = array_keys(og_get_permissions());
+    // Revoke all permissions by default.
+    $og_permissions = array_fill_keys($og_permissions, FALSE);
+
+    $og_permissions_matrix = array(
+      OG_ANONYMOUS_ROLE => array(
+        'subscribe',
+      ),
+      OG_AUTHENTICATED_ROLE => array(
+        'unsubscribe',
+      ),
+      OG_ADMINISTRATOR_ROLE => array(
+        'add user',
+        'administer group',
+        'approve and deny subscription',
+        'manage members',
+        'manage permissions',
+        'manage roles',
+        'update group',
+      ),
+      DP_BU_OG_ROLE_PRODUCT_MANAGER => array(),
+      DP_BU_OG_ROLE_API_DEVELOPER => array(),
+      DP_BU_OG_ROLE_PARTNER => array(),
+	  DP_BU_OG_ROLE_APP_DEVELOPER => array(),
+    );
+
+    $permissions_by_rid = array();
+    foreach ($business_unit_roles as $rid => $role) {
+      $permissions_by_rid[$rid] = array_fill_keys($og_permissions_matrix[$role], TRUE) + $og_permissions;
+    }
+
+    // Save OG permissions.
+    foreach ($permissions_by_rid as $rid => $permissions) {
+      og_role_change_permissions($rid, $permissions);
+    }
+
+    // Set up default Drupal BU node CRUD permissions.
+    $permissions = array(
+      DP_USER_ROLE_ADMINISTRATOR => array(
+        'create business_unit content',
+        'delete any business_unit content',
+        'delete own business_unit content',
+        'edit any business_unit content',
+        'edit own business_unit content',
+      ),
+      DP_USER_ROLE_PLATFORM_OWNER => array(
+        'create business_unit content',
+        'delete own business_unit content',
+        'edit own business_unit content',
+      ),
+    );
+
+    foreach (array(DP_USER_ROLE_ADMINISTRATOR, DP_USER_ROLE_PLATFORM_OWNER) as $role_name) {
+      $role = user_role_load_by_name($role_name);
+      if ($role) {
+        user_role_grant_permissions($role->rid, $permissions[$role_name]);
+      }
+    }
+  }
+}
+
+/**
+ * Implements hook_post_features_revert().
+ */
+function dp_bu_post_features_revert($component) {
+  if ($component == 'node') {
+    // Do not require rebuild of node access when Business Unit node type
+    // restored.
+    node_access_needs_rebuild(FALSE);
+  }
+}
+
+/**
+ * Get IDs of all Business Units where user is an approved member.
+ *
+ * @param \stdClass $account
+ *   User account object. Default is the current user.
+ * @param bool $reset
+ *   Reset static cache.
+ *
+ * @return array
+ *   Array of Business Unit IDs (nids).
+ */
+function dp_bu_get_business_units_by_user(stdClass $account = NULL, $reset = FALSE) {
+  if (!$account) {
+    global $user;
+    $account = $user;
+  }
+  $nids = &drupal_static(__FUNCTION__ . ':' . $account->uid, array());
+  if (empty($nids) || $reset) {
+    $efq = new EntityFieldQuery();
+    $efq->entityCondition('entity_type', 'node');
+    $efq->entityCondition('bundle', 'business_unit');
+    $result = $efq->execute();
+    if (!empty($result['node'])) {
+      $nids = array_keys($result['node']);
+      // If given user is an administrator/platform owner them s/he can access
+      // to every BUs, else this list should be filtered by given user's
+      // active OG memberships.
+      $administrator_role = user_role_load_by_name(DP_USER_ROLE_ADMINISTRATOR);
+      $platform_owner_role = user_role_load_by_name(DP_USER_ROLE_PLATFORM_OWNER);
+      if ($account->uid != 1 && !($administrator_role && user_has_role($administrator_role->rid, $account)) && !($platform_owner_role && user_has_role($platform_owner_role->rid, $account))) {
+        $group_nids_of_user = og_get_groups_by_user($account, 'node');
+        // It could be NULL if user is uid0.
+        // FIXME Remove after this patch added to OG.
+        // @see https://www.drupal.org/node/2569471
+        if (is_array($group_nids_of_user)) {
+          $nids = array_intersect($nids, $group_nids_of_user);
+        }
+        else {
+          $nids = array();
+        }
+      }
+    }
+  }
+  return $nids;
+}
+
+/**
+ * Returns all API Products which belongs to the given Business Unit.
+ *
+ * @param string $bu_name
+ *   Unique identifier (name) of the Business Unit.
+ * @param bool $reset
+ *   Reset static cache.
+ *
+ * @return \Drupal\devconnect_developer_apps\ApiProductEntity[]|array
+ *   Array of API Product entities, which belongs to the given BU or an empty
+ *   array.
+ */
+function dp_bu_get_api_products_of_business_unit($bu_name, $reset = FALSE) {
+  $products = &drupal_static(__FUNCTION__ . ':' . $bu_name, array());
+  if (empty($products) || $reset) {
+    $products = array_filter(entity_load('api_product'), function ($product) use ($bu_name) {
+      /** @var \Drupal\devconnect_developer_apps\ApiProductEntity $product */
+      // Both attributes are required.
+      $bu = (isset($product->attributes[DP_BU_EDGE_ATTR_BU_NAME]) && isset($product->attributes[DP_BU_EDGE_ATTR_PRODUCT_VISIBILITY])) ? $product->attributes[DP_BU_EDGE_ATTR_BU_NAME] : FALSE;
+      return $bu && $bu == $bu_name;
+    });
+  }
+
+  return $products;
+}
+
+/**
+ * Returns all public API Products.
+ *
+ * @param bool $reset
+ *   Reset static cache.
+ *
+ * @return \Drupal\devconnect_developer_apps\ApiProductEntity[]|array
+ *   Array of API Product entities, which DP_BU_EDGE_ATTR_PRODUCT_VISIBILITY
+ *   attribute's set to public.
+ */
+function dp_bu_get_public_api_products($reset = FALSE) {
+  $products = &drupal_static(__FUNCTION__, array());
+  if (empty($products) || $reset) {
+    $products = array_filter(entity_load('api_product'), function ($product) {
+      /** @var \Drupal\devconnect_developer_apps\ApiProductEntity $product */
+      // Both attributes are required.
+      return (isset($product->attributes[DP_BU_EDGE_ATTR_PRODUCT_VISIBILITY]) && isset($product->attributes[DP_BU_EDGE_ATTR_BU_NAME])) && $product->attributes[DP_BU_EDGE_ATTR_PRODUCT_VISIBILITY] == 'public';
+    });
+  }
+
+  return $products;
+}
+
+/**
+ * Helper function which returns Business Unit associations of API Products.
+ *
+ * If an API Product missing from the returned result it means it has no BU_Name
+ * attribute set.
+ *
+ * @param array $ids
+ *   Array of entity ids.
+ * @param array $conditions
+ *   Array of conditions.
+ * @param bool $reset
+ *   Reset static cache.
+ *
+ * @return array
+ *   An associated array where keys are the names of the API Products and values
+ *   are the names of the associated BUs.
+ */
+function dp_bu_get_business_units_of_api_products(array $ids = array(), array $conditions = array(), $reset = FALSE) {
+  $assoc = &drupal_static(__FUNCTION__ . ':query:' . md5(implode(',', $ids) . implode(',', $conditions)), array());
+  if (empty($assoc) || $reset) {
+    $assoc = array_reduce(entity_load('api_product', $ids, $conditions), function ($result, $product) {
+      /** @var \Drupal\devconnect_developer_apps\ApiProductEntity $product */
+      if (isset($product->attributes[DP_BU_EDGE_ATTR_BU_NAME])) {
+        $result[$product->name] = $product->attributes[DP_BU_EDGE_ATTR_BU_NAME];
+      }
+      return $result;
+    }, array());
+  }
+
+  return $assoc;
+}
+
+/**
+ * Fetches all API Products which the given user has access to.
+ *
+ * @param \stdClass $account
+ *   User account object. Default is the current user.
+ * @param bool $reset
+ *   Reset static cache.
+ *
+ * @return array|\Drupal\devconnect_developer_apps\ApiProductEntity[]
+ *   Array of API Products.
+ */
+function dp_bu_get_api_products_of_user(stdClass $account = NULL, $reset = FALSE) {
+  $api_products = dp_bu_get_public_api_products($reset);
+  $bus_of_user = node_load_multiple(dp_bu_get_business_units_by_user($account, $reset));
+  $administrator_role = user_role_load_by_name(DP_USER_ROLE_ADMINISTRATOR);
+  $platform_owner_role = user_role_load_by_name(DP_USER_ROLE_PLATFORM_OWNER);
+  foreach ($bus_of_user as $bu) {
+    $bu_products = dp_bu_get_api_products_of_business_unit($bu->field_bu_name[LANGUAGE_NONE][0]['machine'], $reset);
+    // Do not apply further limitations on administrators and platform owners
+    // role members.
+    if ($account->uid == 1 || ($administrator_role && user_has_role($administrator_role->rid, $account)) || ($platform_owner_role && user_has_role($platform_owner_role->rid, $account))) {
+      $api_products += $bu_products;
+      continue;
+    }
+    $user_og_roles = og_get_user_roles('node', $bu->nid, $account->uid, FALSE);
+    $user_og_roles = array_keys($user_og_roles);
+    $partner_rid = reset(dp_bu_get_rids_of_roles(array(DP_BU_OG_ROLE_PARTNER)));
+    // If user is just a partner in current BU, filter out all private API
+    // Products from the result.
+    if ($partner_rid && in_array($partner_rid, $user_og_roles) && count($user_og_roles) == 1) {
+      $bu_products = array_filter($bu_products, function ($product) {
+        /** @var \Drupal\devconnect_developer_apps\ApiProductEntity $product */
+        return $product->attributes[DP_BU_EDGE_ATTR_PRODUCT_VISIBILITY] != 'private';
+      });
+    }
+    $api_products += $bu_products;
+  }
+
+  return $api_products;
+}
+
+/**
+ * Implements hook_apiproduct_list_alter().
+ *
+ * Limit API Product list on Add App form to display only those API Products,
+ * which the given user has access to.
+ *
+ * @see devconnect_developer_apps_edit_form()
+ */
+function dp_bu_apiproduct_list_alter(&$api_products, $account) {
+  $api_products = dp_bu_get_api_products_of_user($account);
+}
+
+/**
+ * Returns group ids (nids) of Business Unit which has the given BU_Name.
+ *
+ * @param array $bu_names
+ *   Array of Business Unit identifiers.
+ * @param bool $access_check
+ *   Determine whether node_access should be applied or not.
+ *
+ * @return array
+ *   Associative array, where keys are the BU_Name-s and values are the group
+ *   ids. (Node nids.)
+ */
+function dp_bu_get_group_ids_of_business_units_by_bu_names(array $bu_names = array(), $access_check = TRUE) {
+  $query = db_select('field_data_field_bu_name', 'fbn');
+  if (!empty($bu_names)) {
+    $query->condition('field_bu_name_machine', $bu_names, 'IN');
+  }
+  if ($access_check) {
+    $query->addTag('node_access');
+  }
+  $query->fields('fbn', array('field_bu_name_machine', 'entity_id'));
+  return $query->execute()->fetchAllKeyed();
+}
+
+/**
+ * Helper function which returns OG role ids of role names.
+ *
+ * @param string[] $roles
+ *   Roles names.
+ * @param bool $reset
+ *   Reset static cache.
+ *
+ * @return array
+ *   Array of role ids.
+ */
+function dp_bu_get_rids_of_roles(array $roles, $reset = FALSE) {
+  $rids = array_map(function ($role) use ($reset) {
+    return dp_bu_get_gid_of_role($role, $reset);
+  }, $roles);
+
+  return array_filter($rids);
+}
+
+/**
+ * Helper function which returns OG role id of role name.
+ *
+ * @param string $role
+ *   Role name.
+ * @param bool $reset
+ *   Reset static cache.
+ *
+ * @return int|bool
+ *   Role id of role name if role exits, FALSE otherwise.
+ */
+function dp_bu_get_gid_of_role($role, $reset = FALSE) {
+  $rid = &drupal_static(__FUNCTION__ . ':' . $role, FALSE);
+  if ($rid === FALSE || $reset) {
+    $rid = array_search($role, og_roles('node', 'business_unit'));
+
+    if ($rid === FALSE) {
+      watchdog(__FUNCTION__, '@role role rid cannot be found as a BU roles.', array('@role' => $role), WATCHDOG_WARNING);
+    }
+  }
+
+  return $rid;
+}
+
+/**
+ * Implements hook_views_plugins().
+ */
+function dp_bu_views_plugins() {
+  $plugins = array();
+
+  $plugins['access']['dp_bu_business_unit_managers_access_plugin'] = array(
+    'title' => t('DP: Business Units: Business Unit managers'),
+    'handler' => 'dp_bu_business_unit_managers_access_plugin',
+    'path' => drupal_get_path('module', 'dp_bu') . '/views',
+    'help' => t('Provides access only for group admins, product owners and users with Drupal administrator or platform owner role.'),
+  ); 
+   $plugins['access']['dp_bu_my_apis_access_plugin'] = array(
+    'title' => t('DP: My APIs: My APIs Access'),
+    'handler' => 'dp_bu_my_apis_access_plugin',
+    'path' => drupal_get_path('module', 'dp_bu') . '/views',
+    'help' => t('Provides access for group admins, product owners, API Developer, Partner and users with Drupal administrator or platform owner role.'),
+  ); 
+
+  return $plugins;
+}
+
+/**
+ * Callback for dp_bu_business_unit_managers_access_plugin views access plugin.
+ *
+ * @param \stdClass|null $account
+ *   User object.
+ *
+ * @return bool
+ *   TRUE or FALSE.
+ */
+function _dp_bu_business_unit_managers_access_plugin(stdClass $account = NULL) {
+  if (!$account) {
+    global $user;
+    // We need the full user object.
+    $account = user_load($user->uid);
+  }
+
+  $administrator_role = user_role_load_by_name(DP_USER_ROLE_ADMINISTRATOR);
+  $platform_owner_role = user_role_load_by_name(DP_USER_ROLE_PLATFORM_OWNER);
+  // Drupal administrators and platform owners always have access.
+  if ($account->uid == 1 || ($administrator_role && user_has_role($administrator_role->rid, $account)) || ($platform_owner_role && user_has_role($platform_owner_role->rid, $account))) {
+    return TRUE;
+  }
+
+  // Users with administrator member or product manager role in a Business Unit
+  // also can access.
+  if (!empty($account->og_user_node)) {
+    foreach ($account->og_user_node[LANGUAGE_NONE] as $group) {
+      $user_og_roles = og_get_user_roles('node', $group['target_id'], $account->uid);
+      $user_og_roles = array_keys($user_og_roles);
+      $rids = dp_bu_get_rids_of_roles(array(OG_ADMINISTRATOR_ROLE, DP_BU_OG_ROLE_PRODUCT_MANAGER));
+      $user_special_roles = array_intersect($user_og_roles, $rids);
+      return !empty($user_special_roles);
+    }
+  }
+
+  return FALSE;
+}
+
+/**
+ * Implements hook_query_TAG_alter().
+ */
+function dp_bu_query_views_other_business_units_block_alter(QueryAlterableInterface $query) {
+  // We cannot use dp_bu_get_business_units_by_user() because it does not
+  // apply any limitations for admins and platform owners, therefore always
+  // returns all BU nids.
+  $groups_of_current_user = og_get_groups_by_user(NULL, 'node');
+  // It could be NULL if user is uid0.
+  // FIXME Remove after this patch added to OG.
+  // @see https://www.drupal.org/node/2569471
+  if ($groups_of_current_user == NULL) {
+    $groups_of_current_user = array();
+  }
+  if (!empty($groups_of_current_user)) {
+    $query->condition('node_og_membership.nid', $groups_of_current_user, 'NOT IN');
+  }
+}
+
+/**
+ * Implements hook_views_pre_view().
+ */
+function dp_bu_views_pre_view($view, &$display_id, &$args) {
+  if ($view->name == 'business_units' && $view->current_display == 'page') {
+    $block = views_get_view('business_units');
+    $block->set_display('other_business_units_block');
+    $content = '<h2>' . $block->get_title() . '</h2>';
+    $content .= $block->preview();
+    $view->add_item($view->current_display, 'footer', 'views', 'area', array('content' => $content, 'format' => 'full_html', 'empty' => TRUE));
+  }
+}
+
+/**
+ * Implements hook_preprocess_HOOK().
+ */
+function dp_bu_preprocess_page(&$vars) {
+  $view = views_get_page_view();
+  // Modifying view's title without modifying page's title.
+  if ($view && $view->name == 'business_units' && $view->current_display == 'page') {
+    $vars['title'] = t('My Business Units');
+  }
+}
+
+/**
+ * Callback for dp_bu_my_apis_access_plugin views access plugin.
+ *
+ * @param \stdClass|null $account
+ *   User object.
+ *
+ * @return bool
+ *   TRUE or FALSE.
+ */
+function _dp_bu_my_apis_access_plugin(stdClass $account = NULL) {
+  if (!$account) {
+    global $user;
+    // We need the full user object.
+    $account = user_load($user->uid);
+  }
+  $administrator_role = user_role_load_by_name(DP_USER_ROLE_ADMINISTRATOR);
+  $platform_owner_role = user_role_load_by_name(DP_USER_ROLE_PLATFORM_OWNER);
+  // Drupal administrators and platform owners always have access.
+   if ($account->uid == 1 || ($administrator_role && user_has_role($administrator_role->rid, $account)) || ($platform_owner_role && user_has_role($platform_owner_role->rid, $account))) {
+    return TRUE;
+  } 
+  // Users with administrator member/ product manager/ API developer in a Business Unit
+  // also can access.
+  if (!empty($account->og_user_node)) {
+    foreach ($account->og_user_node[LANGUAGE_NONE] as $group) {
+      $user_og_roles = og_get_user_roles('node', $group['target_id'], $account->uid);
+      $user_og_roles = array_keys($user_og_roles);
+      $rids = dp_bu_get_rids_of_roles(array(OG_ADMINISTRATOR_ROLE, DP_BU_OG_ROLE_PRODUCT_MANAGER, DP_BU_OG_ROLE_API_DEVELOPER));
+      $user_special_roles = array_intersect($user_og_roles, $rids);
+      return !empty($user_special_roles);
+    }
+  }
+  return FALSE;
+}

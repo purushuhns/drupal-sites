@@ -1,0 +1,288 @@
+<?php
+/**
+ * @file
+ * Install, update and uninstall functions for the AIG Core module.
+ */
+
+/**
+ * Implements hook_update_dependencies().
+ */
+function amer_core_update_dependencies() {
+  $dependencies = array();
+  $dependencies['amer_core'][7000] = array(
+    'smartdocs_parameter' => 7407,
+  );
+  return $dependencies;
+}
+
+/**
+ * Implements hook_install().
+ */
+function amer_core_install() {
+  // Apply all updates when module is installed.
+  for ($i = 7000; $i < 8000; $i++) {
+    $candidate = "amer_core_update_$i";
+    if (function_exists($candidate)) {
+      call_user_func($candidate, array());
+    }
+    else {
+      break;
+    }
+  }
+}
+
+/**
+ * Enable DP: Business Unit, DP: BU: Smartdocs and DP User features.
+ */
+function amer_core_update_7000() {
+  $features = array(
+    'dp_user',
+    'dp_bu',
+    'dp_bu_smartdocs',
+  );
+  features_install_modules($features);
+  foreach ($features as $module) {
+    features_revert_module($module);
+  }
+}
+
+/**
+ * Disable original App dashboard view.
+ */
+function amer_core_update_7001(&$sandbox) {
+  $views_status = variable_get('views_defaults', array());
+  $views_status['dp_app_dashboard'] = TRUE;
+  variable_set('views_defaults', $views_status);
+  views_invalidate_cache();
+}
+
+/**
+ * Enable new aig_app_dashboard feature.
+ */
+function amer_core_update_7002(&$sandbox) {
+  if (!module_exists('aig_app_dashboard')) {
+    module_enable(array('aig_app_dashboard'));
+    features_revert_module('aig_app_dashboard');
+  }
+}
+
+/**
+ * Disable and uninstall deprecated aig_app_dashboard feature.
+ */
+function amer_core_update_7003(&$sandbox) {
+  if (module_exists('aig_app_dashboard')) {
+    module_disable(array('aig_app_dashboard'));
+    drupal_uninstall_modules(array('aig_app_dashboard'));
+  }
+}
+
+/**
+ * Enable new dp_bu_app_dashboard feature.
+ */
+function amer_core_update_7004(&$sandbox) {
+  if (!module_exists('dp_bu_app_dashboard')) {
+    module_enable(array('dp_bu_app_dashboard'));
+    features_revert_module('dp_bu_app_dashboard');
+  }
+}
+
+/**
+ * Set up titles of some User menu items.
+ */
+function amer_core_update_7005(&$sandbox) {
+  $query = db_select('menu_links', 'ml');
+  $query->condition('menu_name', 'user-menu')
+    ->fields('ml', array('mlid'));
+  $user_menu_items = $query->execute()->fetchCol();
+
+  foreach ($user_menu_items as $mlid) {
+    $menu_item = (array) menu_link_load($mlid);
+    switch ($menu_item['link_path']) {
+      case 'user':
+        $menu_item['link_title'] = 'Profile';
+        break;
+
+      case 'user/logout':
+        $menu_item['link_title'] = 'Sign out';
+        break;
+
+      default:
+        continue;
+    }
+    menu_link_save($menu_item);
+  }
+
+  $default = array(
+    'weight' => 0,
+    'plid' => 0,
+  );
+
+  $item = array(
+      'link_title' => 'Site admin',
+      'link_path' => 'admin',
+      'menu_name' => 'user-menu',
+    ) + $default;
+  menu_link_save($item);
+
+  $item = array(
+      'link_title' => 'My APIs',
+      'link_path' => 'apilist',
+      'menu_name' => 'user-menu',
+    ) + $default;
+  menu_link_save($item);
+
+  $item = array(
+      'link_title' => 'My Apps',
+      'link_path' => 'user/me/apps',
+      'menu_name' => 'user-menu',
+    ) + $default;
+  menu_link_save($item);
+}
+
+/**
+ * Enable new dp_bu_notifications feature.
+ */
+function amer_core_update_7006(&$sandbox) {
+  if (!module_exists('dp_bu_notifications')) {
+    module_enable(array('dp_bu_notifications'));
+    features_revert_module('dp_bu_notifications');
+  }
+}
+
+/**
+ * Rebuild registry after DP: App Dashboard moved.
+ */
+function amer_core_update_7007() {
+}
+
+/**
+ * Enable new dp_bu_app_dashboard_notifications feature.
+ */
+function amer_core_update_7008(&$sandbox) {
+  if (!module_exists('dp_bu_app_dashboard_notifications')) {
+    module_enable(array('dp_bu_app_dashboard_notifications'));
+    features_revert_module('dp_bu_app_dashboard_notifications');
+  }
+}
+
+/**
+ * Revert DP: Business Units feature.
+ */
+function amer_core_update_7009(&$sandbox) {
+  features_revert_module('dp_bu');
+}
+
+/**
+ * Revert DP: Business Units: Smartdocs feature.
+ */
+function amer_core_update_7010(&$sandbox) {
+  features_revert_module('dp_bu_smartdocs');
+}
+
+/**
+ * Remove deprecated "send_email_on_creating_developer_app" rule.
+ */
+function amer_core_update_7011(&$sandbox) {
+  $rule = rules_config_load('rules_send_email_on_creating_developer_app');
+  if ($rule) {
+    $rule->delete();
+  }
+}
+
+/**
+ * Enable Legal module.
+ */
+function amer_core_update_7012(&$sandbox) {
+  if (!module_exists('legal')) {
+    module_enable(array('legal'));
+  }
+}
+
+/**
+ * Migrate data from swagger file field to source file field.
+ */
+function amer_core_update_7013(&$sandbox) {
+  if (!isset($sandbox['max'])) {
+    // Ensure module is enabled...
+    if (!module_exists('dp_smartdocs')) {
+      module_enable(array('dp_smartdocs'));
+    }
+    // ... and it is in default state...
+    features_revert_module('dp_smartdocs');
+    // ... and new folder exists.
+    $dir = DP_SMARTDOCS_MODEL_SOURCE_FOLDER_PATH;
+    if (!file_prepare_directory($dir, FILE_CREATE_DIRECTORY | FILE_MODIFY_PERMISSIONS)) {
+      throw new Exception(sprintf('%s directory cannot be created.', $dir));
+    }
+    // Collect all files which needs to be moved.
+    $query = db_select('file_managed', 'fm');
+    $query->condition('fm.uri', 'public://model_swagger/%', 'LIKE')
+      ->fields('fm', array('fid'));
+    $sandbox['fids'] = $query->execute()->fetchCol();
+    $sandbox['max'] = count($sandbox['fids']);
+    $sandbox['current'] = 0;
+    $sandbox['migrate_error'] = FALSE;
+  }
+
+  // taxonomy_term_load_multiple() not gonna return anything for uid0,
+  // so we need to run this as uid1.
+  // @see dp_bu_smartdocs_query_term_access_alter()
+  global $user;
+  $original_user = $user;
+  $user = user_load(1);
+  $old_state = drupal_save_session();
+  drupal_save_session(FALSE);
+
+  $fids = array_slice($sandbox['fids'], $sandbox['current'], 10);
+
+  foreach (file_load_multiple($fids) as $file) {
+    $file_usages = file_usage_list($file);
+    if (isset($file_usages['file']['taxonomy_term'])) {
+      foreach (taxonomy_term_load_multiple(array_keys($file_usages['file']['taxonomy_term'])) as $term) {
+        $emw = entity_metadata_wrapper('taxonomy_term', $term);
+        $emw->field_model_source = array(
+          'fid' => $file->fid,
+          'display' => 1,
+        );
+        // Wild guess.
+        $emw->field_model_source_format = 'swaqger';
+        try {
+          $emw->save();
+        }
+        catch (Exception $e) {
+          $sandbox['migrate_error'] = TRUE;
+          watchdog(__FUNCTION__, 'Model swagger field cannot be migrated on @term term.', array('@term' => $emw->label()), WATCHDOG_ERROR);
+        }
+      }
+    }
+    if ($source = file_unmanaged_move($file->uri, DP_SMARTDOCS_MODEL_SOURCE_FOLDER_PATH . '/' . $file->filename)) {
+      $file->uri = $source;
+      file_save($file);
+    }
+    else {
+      watchdog(__FUNCTION__, '@file file cannot be moved to its new location.', array('@file' => $file->filename), WATCHDOG_ERROR);
+    }
+    $sandbox['current']++;
+  }
+
+  $user = $original_user;
+  drupal_save_session($old_state);
+
+  $sandbox['#finished'] = ($sandbox['max'] == 0 || $sandbox['current'] / $sandbox['max']);
+
+  if ($sandbox['#finished']) {
+    // Try to remove deprecated directory in the end of the process.
+    if (!drupal_rmdir('public://model_swagger')) {
+      watchdog(__FUNCTION__, '"model_swagger" folder from @public cannot be removed automatically. Probably it is not empty or it does not exist.', array('@public' => variable_get('file_public_path', 'sites/default/files')), WATCHDOG_WARNING);
+    }
+    // Remove deprecated field instance, because we do not need that anymore.
+    if ($sandbox['migrate_error']) {
+      watchdog(__FUNCTION__, 'One or more data from model swagger field cannot be migrated, therefore field instance cannot be deleted automatically.', array(), WATCHDOG_WARNING);
+    }
+    else {
+      if ($instance = field_info_instance('taxonomy_term', 'field_model_swagger', 'smartdocs_models')) {
+        field_delete_instance($instance);
+      }
+    }
+  }
+}

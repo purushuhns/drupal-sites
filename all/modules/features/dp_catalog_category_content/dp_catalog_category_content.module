@@ -1,0 +1,7 @@
+<?php
+/**
+ * @file
+ * Code for the DP: Catalog Category Content feature.
+ */
+
+include_once 'dp_catalog_category_content.features.inc';

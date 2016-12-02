@@ -1,0 +1,738 @@
+<?php
+
+/**
+ * @file
+ * Module file for DP: Business Unit: Smartdocs.
+ */
+
+use Apigee\SmartDocs\Model;
+
+define('DP_BU_SMARTDOCS_OLD_ADMIN_MODEL_PATH_PREFIX', 'admin/content/smartdocs/models');
+define('DP_BU_SMARTDOCS_DANGEROUS_TERM_ACCESS_CHECK_OPT_OUT', 'dp_bu_smartdocs_dangerous_term_access_check_opt_out');
+
+/**
+ * Implements hook_modules_installed().
+ */
+function dp_bu_smartdocs_modules_installed($modules) {
+  if (in_array('dp_bu_smartdocs', $modules)) {
+    // Revert this feature to help OG to detect permissions provided by this
+    // module.
+    features_revert_module('dp_bu_smartdocs');
+
+    // Set up default permissions (provided by this module) for default
+    // OG roles.
+    $business_unit_roles = og_roles('node', 'business_unit');
+
+    $permissions_matrix = array(
+      OG_ANONYMOUS_ROLE => array(),
+      OG_AUTHENTICATED_ROLE => array(),
+      OG_ADMINISTRATOR_ROLE => array(
+        'create smart_method content',
+        'delete any smart_method content',
+        'delete own smart_method content',
+        'update any smart_method content',
+        'update own smart_method content',
+      ),
+      DP_BU_OG_ROLE_PRODUCT_MANAGER => array(
+        'create smart_method content',
+        'delete any smart_method content',
+        'delete own smart_method content',
+        'update any smart_method content',
+        'update own smart_method content',
+      ),
+      DP_BU_OG_ROLE_API_DEVELOPER => array(
+        'create smart_method content',
+        'delete own smart_method content',
+        'update own smart_method content',
+      ),
+      DP_BU_OG_ROLE_PARTNER => array(),
+    );
+
+    foreach ($business_unit_roles as $rid => $role) {
+      og_role_grant_permissions($rid, $permissions_matrix[$role]);
+    }
+  }
+}
+
+/**
+ * Implements hook_menu().
+ */
+function dp_bu_smartdocs_menu() {
+  $items = array();
+
+  $items['node/%node/smartdocs'] = array(
+    'title' => 'Smartdocs',
+    'description' => 'Administer Smartdocs of Business Unit.',
+    'access callback' => 'dp_bu_smartdocs_smartdocs_access',
+    'access arguments' => array(1),
+    'page callback' => 'dp_bu_smartdocs_list_models_of_bu',
+    'page arguments' => array(1),
+    'type' => MENU_LOCAL_TASK,
+    'file' => 'dp_bu_smartdocs.pages.inc',
+  );
+
+  $items['node/%node/smartdocs/create'] = array(
+    'title' => 'Create new model',
+    'description' => 'Create new model for Business Unit.',
+    'access callback' => 'dp_bu_smartdocs_smartdocs_access',
+    'access arguments' => array(1),
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('dp_bu_smartdocs_create_smartdocs_form', 1),
+    'type' => MENU_LOCAL_ACTION,
+    'file' => 'dp_bu_smartdocs.pages.inc',
+  );
+
+  $items['node/%node/smartdocs/models/%smartdocs_model/import'] = array(
+    'title' => 'Import',
+    'description' => 'Import a new OpenAPI (Swagger) or Smartdocs definition to an existing model.',
+    'access callback' => 'dp_bu_smartdocs_smartdocs_administer_model_access',
+    'access arguments' => array(1, 4),
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('dp_bu_smartdocs_import_smartdocs_form', 1, 4),
+    'type' => MENU_CALLBACK,
+    'file' => 'dp_bu_smartdocs.pages.inc',
+  );
+
+  $items['node/%node/smartdocs/models/%smartdocs_model/settings'] = array(
+    'title' => 'Settings',
+    'description' => 'API model settings.',
+    'access callback' => 'dp_bu_smartdocs_smartdocs_administer_model_access',
+    'access arguments' => array(1, 4),
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('dp_bu_smartdocs_model_settings_form', 1, 4),
+    'type' => MENU_CALLBACK,
+    'file' => 'dp_bu_smartdocs.pages.inc',
+  );
+
+  $items['node/%node/smartdocs/models/%smartdocs_model/revert-template'] = array(
+    'title' => 'Revert model template',
+    'description' => 'Revert template for API model form.',
+    'access callback' => 'dp_bu_smartdocs_smartdocs_administer_model_access',
+    'access arguments' => array(1, 4),
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('dp_bu_smartdocs_model_revert_template_form', 1, 4),
+    'type' => MENU_CALLBACK,
+    'file' => 'dp_bu_smartdocs.pages.inc',
+  );
+
+  $items['node/%node/smartdocs/models/%smartdocs_model/export'] = array(
+    'title' => 'Export API model definition',
+    'description' => 'Export API definition.',
+    'access callback' => 'dp_bu_smartdocs_smartdocs_administer_model_access',
+    'access arguments' => array(1, 4),
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('dp_bu_smartdocs_model_export_form', 1, 4),
+    'type' => MENU_CALLBACK,
+    'file' => 'dp_bu_smartdocs.pages.inc',
+  );
+
+  $items['node/%node/smartdocs/models/%smartdocs_model/delete'] = array(
+    'title' => 'Remove API',
+    'description' => 'Remove API model.',
+    'access callback' => 'dp_bu_smartdocs_smartdocs_administer_model_access',
+    'access arguments' => array(1, 4),
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('dp_bu_smartdocs_model_delete_form', 1, 4),
+    'type' => MENU_CALLBACK,
+    'file' => 'dp_bu_smartdocs.pages.inc',
+  );
+
+  return $items;
+}
+
+/**
+ * Implements hook_menu_alter().
+ *
+ * Change access callback of Smartdocs model term listing pages.
+ * By default these paths handled by views in APIgee's distro, but if those
+ * views are not in use here for some reasons, Taxonomy module gets back
+ * the control.
+ */
+function dp_bu_smartdocs_menu_alter(&$items) {
+  // Override default access callback of taxonomy module.
+  $items['taxonomy/term/%taxonomy_term']['access callback'] = 'dp_bu_smartdocs_smartdocs_model_term_menu_access';
+  $items['taxonomy/term/%taxonomy_term']['access arguments'] = array(2);
+
+  foreach ($items as $path => $item) {
+    // Override access callback of custom views pages.
+    if (isset($item['access callback']) && ($item['access callback'] === 'views_access') && strpos($path, 'taxonomy/term/') === 0) {
+      $parts = explode('/', $path);
+      $term = taxonomy_term_load(end($parts));
+      if ($term && $term->vocabulary_machine_name == 'smartdocs_models') {
+        $items[$path]['access callback'] = 'dp_bu_smartdocs_smartdocs_model_term_menu_access';
+        $items[$path]['access arguments'] = array(2);
+      }
+    }
+  }
+}
+
+/**
+ * Custom access callback for taxonomy term listing pages.
+ *
+ * @param \stdClass|int $term
+ *   Taxonomy term object or term id.
+ *
+ * @return bool
+ *   TRUE or FALSE.
+ *
+ * @see dp_bu_smartdocs_menu_alter()
+ */
+function dp_bu_smartdocs_smartdocs_model_term_menu_access($term) {
+  // If this handler called on a views path, then term needs to be loaded
+  // manually.
+  if (!is_object($term)) {
+    $term = taxonomy_term_load($term);
+  }
+
+  // Term could not be loaded, therefore
+  // dp_bu_smartdocs_query_term_access_alter() already handled ACLs for the
+  // current user.
+  if (!$term) {
+    return FALSE;
+  }
+
+  // Only apply custom access handler on Smartdocs model terms.
+  // Necessary check for that case if taxonomy.module manages the listing
+  // page.
+  if ($term->vocabulary_machine_name !== 'smartdocs_models') {
+    return user_access('access content');
+  }
+
+  global $user;
+  $admin_role = user_role_load_by_name(DP_USER_ROLE_ADMINISTRATOR);
+  // Don't apply any limitations for uid=1 and administrators.
+  if ($user->uid == 1 || ($admin_role && user_has_role($admin_role->rid))) {
+    return TRUE;
+  }
+
+  // If there at least one API method which one the current user can access,
+  // then provide access to the taxonomy term page.
+  $efq = new EntityFieldQuery();
+  $efq->entityCondition('entity_type', 'node');
+  $efq->entityCondition('bundle', 'smart_method');
+  $efq->fieldCondition('field_smart_method_model', 'tid', $term->tid);
+  $result = $efq->execute();
+  if (!empty($result['node'])) {
+    return TRUE;
+  }
+
+  return FALSE;
+}
+
+/**
+ * Custom access callback for BU related Smartdocs paths.
+ *
+ * @param \stdClass $node
+ *   Business Unit node.
+ *
+ * @return bool
+ *   TRUE or FALSE.
+ *
+ * @see dp_bu_smartdocs_menu()
+ */
+function dp_bu_smartdocs_smartdocs_access(stdClass $node) {
+  if ($node->type == 'business_unit') {
+    $administrator_role = user_role_load_by_name(DP_USER_ROLE_ADMINISTRATOR);
+    $platform_owner_role = user_role_load_by_name(DP_USER_ROLE_PLATFORM_OWNER);
+    if (($administrator_role && user_has_role($administrator_role->rid)) || ($platform_owner_role && user_has_role($platform_owner_role->rid))) {
+      return TRUE;
+    }
+
+    $user_roles = array_values(og_get_user_roles('node', $node->nid));
+    $required_roles = array(
+      DP_BU_OG_ROLE_API_DEVELOPER,
+      DP_BU_OG_ROLE_PRODUCT_MANAGER,
+      OG_ADMINISTRATOR_ROLE,
+    );
+    $user_special_roles = array_intersect($user_roles, $required_roles);
+    if (!empty($user_special_roles)) {
+      return TRUE;
+    }
+  }
+
+  return FALSE;
+}
+
+/**
+ * Custom access callback for node/%node/smartdocs/models/%smartdocs_model/*.
+ *
+ * @param \stdClass $node
+ *   Business Unit node object.
+ * @param array $model_array
+ *   API Model as an array.
+ *
+ * @return bool
+ *   TRUE or FALSE.
+ *
+ * @see dp_bu_smartdocs_menu()
+ */
+function dp_bu_smartdocs_smartdocs_administer_model_access(stdClass $node, array $model_array) {
+  if ($node->type == 'business_unit') {
+    $model_term = dp_smartdocs_get_smartdocs_model_term_by_model_name($model_array['name']);
+    if ($model_term) {
+      $administrator_role = user_role_load_by_name(DP_USER_ROLE_ADMINISTRATOR);
+      $platform_owner_role = user_role_load_by_name(DP_USER_ROLE_PLATFORM_OWNER);
+      if (($administrator_role && user_has_role($administrator_role->rid)) || ($platform_owner_role && user_has_role($platform_owner_role->rid))) {
+        return TRUE;
+      }
+
+      $user_roles = array_values(og_get_user_roles('node', $node->nid));
+      $required_roles = array(
+        DP_BU_OG_ROLE_PRODUCT_MANAGER,
+        OG_ADMINISTRATOR_ROLE,
+      );
+      $user_special_roles = array_intersect($user_roles, $required_roles);
+      if (!empty($user_special_roles)) {
+        return TRUE;
+      }
+
+      // API developers in the current Business Unit always have access to
+      // their own APIs.
+      if (in_array(DP_BU_OG_ROLE_API_DEVELOPER, $user_roles) && $GLOBALS['user']->uid == $model_term->field_model_author[LANGUAGE_NONE][0]['target_id']) {
+        return TRUE;
+      }
+    }
+    else {
+      watchdog(__FUNCTION__, '"@model" model has no Smartdocs model term in the system.', array('@model' => $model_array['name']), WATCHDOG_ERROR);
+    }
+  }
+
+  return FALSE;
+}
+
+/**
+ * Implements hook_node_access_records().
+ */
+function dp_bu_smartdocs_node_access_records($node) {
+  $grants = array();
+  if ($node->type == 'smart_method') {
+    $realms = array();
+    // Drupal admin users always have access to Smartdocs content.
+    $rids = dp_user_get_rids_of_role_names(array(DP_USER_ROLE_ADMINISTRATOR, DP_USER_ROLE_PLATFORM_OWNER));
+    $realms['dp_bu_realm:drupal_roles'] = drupal_map_assoc($rids);
+    $group_nids = array();
+    if (!empty($node->og_group_ref[LANGUAGE_NONE])) {
+      $group_nids = array_map(function ($group) {
+        return $group['target_id'];
+      }, $node->og_group_ref[LANGUAGE_NONE]);
+    }
+    // Users who can administer Smartdocs content inside a group should
+    // have access to unpublished Smartdocs node as well.
+    if (!$node->status) {
+      foreach ($group_nids as $group) {
+        $roles = array(
+          OG_ADMINISTRATOR_ROLE,
+          DP_BU_OG_ROLE_PRODUCT_MANAGER,
+        );
+        $realms['dp_bu_realm:administer_smartdocs:group:' . $group] = dp_bu_get_rids_of_roles($roles);
+        // Also provide access for users in a BU with
+        // DP_BU_OG_ROLE_API_DEVELOPER role to their own unpublished
+        // Smartdocs nodes.
+        // (Ignore anonymous user.)
+        if ($node->uid !== 0) {
+          $realms['dp_bu_realm:access_own:group:' . $group][] = $node->uid;
+        }
+      }
+    }
+    else {
+      $model_term = taxonomy_term_load($node->field_smart_method_model[LANGUAGE_NONE][0]['tid']);
+      if ($model_term) {
+        $prod_visibilities = dp_bu_smartdocs_get_product_visibilities_from_associated_api_products_of_model_term($model_term);
+        foreach ($group_nids as $gid) {
+          foreach ($prod_visibilities as $visibility) {
+            switch ($visibility) {
+              case 'public':
+                $realms['dp_bu_realm:drupal_roles'][DRUPAL_AUTHENTICATED_RID] = DRUPAL_AUTHENTICATED_RID;
+                break;
+
+              case 'partner':
+                if ($rid = dp_bu_get_gid_of_role(DP_BU_OG_ROLE_PARTNER)) {
+                  $realms['dp_bu_realm:visibility_partner:group:' . $gid][$rid] = $rid;
+                }
+                if ($rid = dp_bu_get_gid_of_role(OG_AUTHENTICATED_ROLE)) {
+                  $realms['dp_bu_realm:visibility_private:group:' . $gid][$rid] = $rid;
+                }
+                break;
+
+              case 'private':
+                if ($rid = dp_bu_get_gid_of_role(OG_AUTHENTICATED_ROLE)) {
+                  $realms['dp_bu_realm:visibility_private:group:' . $gid][$rid] = $rid;
+                }
+                break;
+            }
+          }
+        }
+      }
+    }
+
+    foreach ($realms as $realm => $gids) {
+      foreach ($gids as $rid) {
+        $grants[] = array(
+          'realm' => $realm,
+          'gid' => $rid,
+          'grant_view' => 1,
+          'grant_update' => 0,
+          'grant_delete' => 0,
+          'priority' => 1,
+        );
+      }
+    }
+  }
+
+  return $grants;
+}
+
+/**
+ * Implements hook_node_grants().
+ */
+function dp_bu_smartdocs_node_grants($account, $op) {
+  $grants = array();
+  // We are only controlling the view access for Smartdocs methods here.
+  if ($op == 'view') {
+    // Load full user object.
+    $account = user_load($account->uid);
+    // Set grants based on current user's roles.
+    $grants['dp_bu_realm:drupal_roles'] = array_keys($account->roles);
+    // Set grants based on current user's BU memberships and roles.
+    $user_og_memberships = dp_bu_get_business_units_by_user($account);
+    if (!empty($user_og_memberships)) {
+      $user_og_roles = array_reduce($user_og_memberships, function ($result, $gid) use ($account) {
+        $roles = og_get_user_roles('node', $gid, $account->uid);
+        // Every member has access to private APIs, but partners only have
+        // access to APIs which API Products' visibility is partner.
+        // Therefore we need to remove the member role from those users
+        // which also partners in the current group.
+        if (in_array(DP_BU_OG_ROLE_PARTNER, $roles)) {
+          $index = array_search(OG_AUTHENTICATED_ROLE, $roles);
+          unset($roles[$index]);
+        }
+        $result[$gid] = array_keys($roles);
+        return $result;
+      }, array());
+
+      foreach ($user_og_roles as $gid => $og_rids) {
+        $grants['dp_bu_realm:visibility_partner:group:' . $gid] = $og_rids;
+        $grants['dp_bu_realm:visibility_private:group:' . $gid] = $og_rids;
+        $grants['dp_bu_realm:administer_smartdocs:group:' . $gid] = $og_rids;
+        $grants['dp_bu_realm:access_own:group:' . $gid][] = $account->uid;
+      }
+    }
+  }
+  return $grants;
+}
+
+/**
+ * Get all Smartdocs model term (ids) which belongs to this Business Unit.
+ *
+ * @param int $nid
+ *   Node id of Business Unit.
+ * @param bool $reset
+ *   Reset static cache.
+ * @param bool $access_check
+ *   Ignore node access.
+ *
+ * @return int[]
+ *   Array of (Smartdocs model) taxonomy term ids, which belongs to the given
+ *   Business Unit.
+ */
+function dp_bu_smartdocs_get_all_smartdocs_model_tids_of_bu($nid, $reset = FALSE, $access_check = TRUE) {
+  $tids = &drupal_static(__FUNCTION__ . ':' . $nid, array());
+  if (empty($tids) || $reset) {
+    $vocab = taxonomy_vocabulary_machine_name_load('smartdocs_models');
+    if (!$vocab) {
+      watchdog(__FUNCTION__, 'Smartdocs model term vocabulary cannot be loaded.', array(), WATCHDOG_ERROR);
+      return $tids;
+    }
+    $efq = new EntityFieldQuery();
+    $efq->entityCondition('entity_type', 'taxonomy_term');
+    $efq->propertyCondition('vid', $vocab->vid);
+    $efq->fieldCondition('field_model_bu', 'target_id', $nid);
+    if (!$access_check) {
+      $efq->addTag('DANGEROUS_ACCESS_CHECK_OPT_OUT');
+    }
+    $result = $efq->execute();
+    if (!empty($result['taxonomy_term'])) {
+      $tids = array_keys($result['taxonomy_term']);
+    }
+  }
+  return $tids;
+}
+
+/**
+ * Get all Smartdocs model terms which belongs to this Business Unit.
+ *
+ * @param int $nid
+ *   Node id of Business Unit.
+ * @param bool $reset
+ *   Reset static cache.
+ * @param bool $access_check
+ *   Ignore node access.
+ *
+ * @return \stdClass[]
+ *   Array of (Smartdocs model) term objects.
+ */
+function dp_bu_smartdocs_get_all_smartdocs_model_terms_of_bu($nid, $reset = FALSE, $access_check = TRUE) {
+  $terms = &drupal_static(__FUNCTION__ . ':' . $nid, array());
+  if (empty($terms) || $reset) {
+    $tids = dp_bu_smartdocs_get_all_smartdocs_model_tids_of_bu($nid, $reset, $access_check);
+    return taxonomy_term_load_multiple($tids);
+  }
+  return $terms;
+}
+
+/**
+ * Helper function which returns the of the terms object.
+ *
+ * @param array $terms
+ *   Array of term objects.
+ *
+ * @return array
+ *   Array of term names.
+ */
+function _dp_bu_smartdocs_get_names_of_terms(array $terms) {
+  return array_map(function ($term) {
+    return $term->name;
+  }, $terms);
+}
+
+/**
+ * Helper function which returns all API models from Edge indexed by uuid.
+ *
+ * @param bool $reset
+ *   Reset static cache.
+ *
+ * @return \Apigee\SmartDocs\Model[]|array
+ *   Array of API Models indexed by uuids.
+ */
+function dp_bu_get_all_api_models_indexed_by_uuid($reset = FALSE) {
+  $models = &drupal_static(__FUNCTION__, array());
+  if (empty($models) || $reset) {
+    $model = new Model(devconnect_default_org_config());
+    try {
+      $models = $model->listModels();
+    }
+    catch (\Apigee\Exceptions\ResponseException $e) {
+      watchdog_exception(__FUNCTION__, $e, '!exp', array('!exp' => $e));
+    }
+    $models = dp_hacks_return_api_models_indexed_by_uuid($models);
+  }
+
+  return $models;
+}
+
+/**
+ * Returns API models of Business Unit.
+ *
+ * @param int $nid
+ *   Node id of Business Unit.
+ * @param bool $reset
+ *   Reset static cache.
+ *
+ * @return \Apigee\SmartDocs\Model[]|array
+ *   Array of API models, which belongs to the given Business Unit.
+ */
+function dp_bu_get_api_models_of_bu($nid, $reset = FALSE) {
+  $models = &drupal_static(__FUNCTION__ . ':' . $nid, array());
+  if (empty($models) || $reset) {
+    $models = dp_bu_get_all_api_models_indexed_by_uuid($reset);
+    $model_terms_of_bu = dp_bu_smartdocs_get_all_smartdocs_model_terms_of_bu($nid, $reset);
+    $names_of_model_terms_of_bu = _dp_bu_smartdocs_get_names_of_terms($model_terms_of_bu);
+    $models = array_filter($models, function ($model) use ($names_of_model_terms_of_bu) {
+      /** @var Model $model */
+      return in_array($model->getName(), $names_of_model_terms_of_bu);
+    });
+  }
+  return $models;
+}
+
+/**
+ * Implements hook_taxonomy_term_presave().
+ */
+function dp_bu_smartdocs_taxonomy_term_presave($term) {
+  // Grab passed data from dp_bu_smartdocs_create_smartdocs_form_submit().
+  $model_term_extra = &drupal_static(__FUNCTION__ . ':' . $term->name, array());
+  // Only continue if extra data is available.
+  if (empty($model_term_extra)) {
+    return;
+  }
+  $vocab = taxonomy_vocabulary_machine_name_load('smartdocs_models');
+  // Sanity check: only continue if this is a smartdocs model term.
+  if (!$vocab || $term->vid != $vocab->vid) {
+    return;
+  }
+
+  // Set extra data on model term.
+  $emw = entity_metadata_wrapper('taxonomy_term', $term);
+  $emw->field_model_bu = $model_term_extra['business_unit'];
+  $emw->field_model_api_products = $model_term_extra['api_products'];
+}
+
+/**
+ * Implements hook_smartdocs_method_node_presave().
+ */
+function dp_bu_smartdocs_smartdocs_method_node_presave($node, array $model, array $revision, array $resource, array $method) {
+  // Grab passed data from dp_bu_smartdocs_create_smartdocs_form_submit().
+  $model_node_extra = !empty($_SESSION[$model['id']]['dp_bu_smartdocs']) ? $_SESSION[$model['id']]['dp_bu_smartdocs'] : array();
+  if (!empty($model_node_extra)) {
+    $node->og_group_ref[LANGUAGE_NONE][0]['target_id'] = $model_node_extra['business_unit'];
+    // Pass a flag to dp_bu_smartdocs_query_term_access_alter() to prevent
+    // infinite loop caused by this custom term access implementation.
+    // Therefore this alter, every time when a new model has been created by
+    // a non-admin user, each load function which triggers this
+    // hook_query_TAG_alter() implementation and trying to load
+    // this newly created term (by name) is going to return
+    // empty results, because newly created model terms has no Smartdocs
+    // model node, therefore non-admin users cannot access to those terms.
+    drupal_static(DP_BU_SMARTDOCS_DANGEROUS_TERM_ACCESS_CHECK_OPT_OUT, TRUE);
+  }
+}
+
+/**
+ * Returns product visibilities of API model's associated API products.
+ *
+ * @param \stdClass $term
+ *   Smartdocs model term.
+ * @param bool $reset
+ *   Reset static cache.
+ *
+ * @return array
+ *   Array of product visibilities, where the keys are the API Product names and
+ *   the values are the visibilities.
+ */
+function dp_bu_smartdocs_get_product_visibilities_from_associated_api_products_of_model_term(stdClass $term, $reset = FALSE) {
+  $visibilities = &drupal_static(__FUNCTION__ . ':' . $term->tid, array());
+  if (empty($visibilities) || $reset) {
+    $product_names = array();
+    if (!empty($term->field_model_api_products[LANGUAGE_NONE])) {
+      $product_names = array_map(function ($value) {
+        return $value['value'];
+      }, $term->field_model_api_products[LANGUAGE_NONE]);
+    }
+    if (!empty($product_names)) {
+      try {
+        $products = entity_load('api_product', $product_names);
+        /** @var \Drupal\devconnect_developer_apps\ApiProductEntity $product */
+        foreach ($products as $name => $product) {
+          if (!empty($product->attributes[DP_BU_EDGE_ATTR_PRODUCT_VISIBILITY])) {
+            $visibilities[$name] = $product->attributes[DP_BU_EDGE_ATTR_PRODUCT_VISIBILITY];
+          }
+        }
+      }
+      catch (Exception $e) {
+        watchdog_exception(__FUNCTION__, $e, '!message');
+      }
+    }
+  }
+  return $visibilities;
+}
+
+/**
+ * Implements hook_query_TAG_alter().
+ *
+ * Limit access to Smartdocs model terms, based on node access.
+ */
+function dp_bu_smartdocs_query_term_access_alter(QueryAlterableInterface $query) {
+  // Ignore term access, if this flag has been set.
+  // @see dp_bu_smartdocs_create_smartdocs_form_submit()
+  if (drupal_static(DP_BU_SMARTDOCS_DANGEROUS_TERM_ACCESS_CHECK_OPT_OUT, FALSE) || $query->hasTag(DP_BU_SMARTDOCS_DANGEROUS_TERM_ACCESS_CHECK_OPT_OUT)) {
+    return;
+  }
+  global $user;
+  $administrator_role = user_role_load_by_name(DP_USER_ROLE_ADMINISTRATOR);
+
+  // Don't apply any limitations for uid=1 and administrators.
+  if ($user->uid == 1 || ($administrator_role && user_has_role($administrator_role->rid))) {
+    return;
+  }
+
+  $vocabulary = taxonomy_vocabulary_machine_name_load('smartdocs_models');
+  if (!$vocabulary) {
+    watchdog(__FUNCTION__, 'Smartdocs models vocabulary does not exist.', array(), WATCHDOG_ERROR);
+    return;
+  }
+
+  // Get all Smartdocs model nodes, which ones the current user has access to.
+  $efq = new EntityFieldQuery();
+  $efq->entityCondition('entity_type', 'node');
+  $efq->entityCondition('bundle', 'smart_method');
+  // Because we are not using field conditions which would add
+  // entity_field_access tag to this query, we need to add node_access tag
+  // here to limit the results by ACLs.
+  $efq->addTag('node_access');
+  $result = $efq->execute();
+  if (!empty($result['node'])) {
+    $nids = array_keys($result['node']);
+    $tids_query = db_select('field_data_field_smart_method_model', 'smm');
+    $tids_query->fields('smm', array('field_smart_method_model_tid'));
+    $tids_query->condition('entity_id', $nids, 'IN');
+    $tids_query->distinct();
+    $tids = $tids_query->execute()->fetchCol();
+  }
+
+  // It can not be empty, because it could cause problems with
+  // IN operator.
+  if (empty($tids)) {
+    $tids = array(0);
+  }
+
+  $tables = $query->getTables();
+  foreach ($tables as $table) {
+    if ($table['table'] == 'taxonomy_term_data') {
+      // For any queries tagged with term_access add one more condition which
+      // limits listing only those terms where:
+      // - the term's vocabulary is NOT 'smartdocs_models', OR
+      // - the term's vocabulary IS 'smartdocs_models' AND the term id is one
+      //   of those ones which the current user has access to.
+      $and = db_and()
+        ->condition($table['alias'] . '.vid', $vocabulary->vid)
+        ->condition($table['alias'] . '.tid', $tids, 'IN');
+      $or = db_or()
+        ->condition($table['alias'] . '.vid', $vocabulary->vid, '<>')
+        ->condition($and);
+      $query->condition($or);
+    }
+  }
+}
+
+/**
+ * Returns stored API product associations from a Smartdocs model term by name.
+ *
+ * @param $string $name
+ *   Name of the Smartdocs model term/API model.
+ * @param bool $reset
+ *   Reset static cache.
+ *
+ * @return \stdClass|bool
+ *   Model term if exists, FALSE otherwise.
+ */
+function dp_bu_smartdocs_get_api_products_of_model_term_by_name($name, $reset = FALSE) {
+  $api_products = &drupal_static(__FUNCTION__ . ':' . $name, array());
+  if (empty($api_products) || $reset) {
+    $model_term = dp_smartdocs_get_smartdocs_model_term_by_model_name($name, $reset);
+    if ($model_term && !empty($model_term->field_model_api_products[LANGUAGE_NONE])) {
+      $api_products = array_map(function ($item) {
+        return $item['value'];
+      }, $model_term->field_model_api_products[LANGUAGE_NONE]);
+    }
+  }
+
+  return $api_products;
+}
+
+/**
+ * Generates unique model name from Model's display name and BU's name.
+ *
+ * @param string $display_name
+ *   Display name of the API Model.
+ * @param string $bu_name
+ *   (Machine) name of the Business Unit.
+ *
+ * @return string
+ *   Unique name.
+ */
+function _dp_bu_smartdocs_generate_unique_model_name($display_name, $bu_name) {
+  // TODO Ensure to be unique with additional validation and numeric
+  // suffixes if necessary.
+  $value = preg_replace('/[^A-Za-z0-9_-]+/', '-', strtolower($display_name));
+  return $bu_name . '_' . $value;
+}

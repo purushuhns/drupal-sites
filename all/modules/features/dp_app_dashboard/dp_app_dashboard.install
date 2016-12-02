@@ -1,0 +1,122 @@
+<?php
+/**
+ * @file
+ * Install, update and uninstall functions for DP App Dashboard module.
+ */
+
+/**
+ * Implements hook_schema().
+ */
+function dp_app_dashboard_schema() {
+  $schema['dp_app_dashboard'] = array(
+    'description' => "App Dashboard's local cache for Developer Apps.",
+    'fields' => array(
+      'name' => array(
+        'description' => 'App name',
+        'type' => 'varchar',
+        'length' => 255,
+        'not null' => TRUE,
+      ),
+      'app_id' => array(
+        'description' => 'App UUID.',
+        'type' => 'char',
+        // UUID contains hyphens.
+        'length' => 36,
+        'not null' => TRUE,
+      ),
+      'email' => array(
+        'description' => "Developer's email address.",
+        'type' => 'char',
+        'length' => 64,
+        'not null' => TRUE,
+      ),
+      'display_name' => array(
+        'description' => "App's display name",
+        'type' => 'varchar',
+        'length' => 255,
+        'not null' => TRUE,
+      ),
+      'consumer_key' => array(
+        'description' => 'Consumer key',
+        'type' => 'char',
+        'length' => 32,
+        'not null' => FALSE,
+      ),
+      'consumer_secret' => array(
+        'description' => 'Consumer secret',
+        'type' => 'char',
+        'length' => 16,
+        'not null' => FALSE,
+      ),
+      'overall_status' => array(
+        'description' => 'Overall status: revoked, pending, approved',
+        'type' => 'char',
+        'length' => 16,
+        'not null' => TRUE,
+      ),
+      'app_status' => array(
+        'description' => 'App status: revoked, pending, approved',
+        'type' => 'char',
+        'length' => 16,
+        'not null' => TRUE,
+      ),
+      'credential_status' => array(
+        'description' => 'Credential status: revoked, pending, approved',
+        'type' => 'char',
+        'length' => 16,
+        'not null' => TRUE,
+      ),
+      'created_at' => array(
+        'description' => 'Unix timestamp of app creation date',
+        'type' => 'int',
+        'not null' => TRUE,
+      ),
+      'modified_at' => array(
+        'description' => 'Unix timestamp of app modification date',
+        'type' => 'int',
+        'not null' => FALSE,
+      ),
+      'org_name' => array(
+        'description' => 'Name of the organisation, which this developer apps belongs to.',
+        'type' => 'varchar',
+        'length' => 255,
+        'not null' => TRUE,
+      ),
+      'api_product' => array(
+        'description' => 'Machine name of the API Product, which this application belongs to.',
+        'type' => 'varchar',
+        'length' => 255,
+        'not null' => TRUE,
+      ),
+      'key_expiry' => array(
+        'description' => 'Unix timestamp of app expiration date',
+        'type' => 'int',
+        'not null' => FALSE,
+      ),
+      'credential_expiry' => array(
+        'description' => 'Unix timestamp of app credential expiration date',
+        'type' => 'int',
+        'not null' => TRUE,
+      ),
+      'app_status_modified_by' => array(
+        'description' => "Email address of the user who modified the app's status last time.",
+        'type' => 'char',
+        'length' => 255,
+        'not null' => FALSE,
+      ),
+    ),
+    // TODO Add indexes!
+    'primary key' => array('app_id', 'api_product'),
+    'unique keys' => array(
+      'user_app' => array('email', 'app_id', 'api_product', 'org_name'),
+    ),
+    'foreign keys' => array(
+      'name' => array(
+        'table' => 'name',
+        'columns' => array('api_product' => 'name'),
+      ),
+    ),
+  );
+
+  return $schema;
+}

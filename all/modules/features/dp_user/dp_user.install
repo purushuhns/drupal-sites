@@ -1,0 +1,23 @@
+<?php
+
+/**
+ * @file
+ * Install, update and uninstall functions for the DP User module.
+ */
+
+/**
+ * Implements hook_install().
+ */
+function dp_user_install() {
+  $roles = _dp_user_get_custom_roles();
+  foreach ($roles as $role_name) {
+    if (!user_role_load_by_name($role_name)) {
+      $role = (object) array(
+        'name' => $role_name,
+      );
+      if (!user_role_save($role)) {
+        throw new Exception('One or more user roles cannot be created!');
+      }
+    }
+  }
+}

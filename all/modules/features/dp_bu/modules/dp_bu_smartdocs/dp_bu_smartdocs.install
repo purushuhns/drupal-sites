@@ -1,0 +1,43 @@
+<?php
+
+/**
+ * @file
+ * Install, update and uninstall functions for the DP: BU: Smartdocs module.
+ */
+
+/**
+ * Implements hook_install().
+ *
+ * @see dp_bu_smartdocs_modules_installed()
+ */
+function dp_bu_smartdocs_install() {
+  $weights = db_select('system', 's')
+    ->fields('s', array('name', 'weight'))
+    ->condition('type', 'module')
+    ->condition('name', array('views', 'taxonomy', 'dp_smartdocs'), 'IN')
+    ->execute()
+    ->fetchAllKeyed();
+  // Weight this module way after Views, Taxonomy and DP Smartdocs modules.
+  // This is necessary for overriding menu access callbacks on taxonomy term
+  // view pages.
+  // @see dp_bu_smartdocs_menu_alter().
+  // TODO Verify correct module weight in hook_requirements().
+  db_update('system')
+    ->fields(array(
+      'weight' => array_sum($weights) + 10,
+    ))
+    ->condition('type', 'module')
+    ->condition('name', 'dp_bu_smartdocs')
+    ->execute();
+
+  // Rebuild node access.
+  node_access_rebuild();
+}
+
+/**
+ * Implements hook_uninstall().
+ */
+function dp_bu_smartdocs_uninstall() {
+  // Rebuild node access.
+  node_access_rebuild();
+}

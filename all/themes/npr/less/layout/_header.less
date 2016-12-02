@@ -1,0 +1,122 @@
+#header-2 {
+  .main-nav {
+    .nav.navbar-nav > .nav-item {
+        .typo-main-menu();
+
+        &.dropdown {
+          a {
+            border: none;
+          }
+        }
+
+        .dropdown-menu {
+          a {
+            text-transform: capitalize;
+          }
+        }
+      }
+  }
+
+  .brand-img {
+    float: none;
+    margin: 15px 0 24px 0;
+    text-align: center;
+    max-width: 120px;
+    display: inline-block;
+  }
+
+  #site-slogan {
+    .typo-site-name();
+    display: inline-block;
+    margin-left: 40px;
+  }
+}
+
+#content-2-1 {
+  background-image: url('../images/marquee_woc.jpg');
+  -webkit-background-size: cover;
+  -moz-background-size: cover;
+  -o-background-size: cover;
+  background-size: cover;
+  background-repeat: no-repeat;
+
+  h1 {
+    .font--futurapt-book();
+    color: @color-white;
+    font-size: 88px;
+    font-weight: 100;
+  }
+
+  p {
+    .font--sourcesanspro-regular();
+    font-size: 20px;
+    color: @color-white;
+  }
+
+  .caret-custom {
+    border: 2px solid @color-blue;
+    width: 60px;
+    height: 60px;
+    border-radius: 30px;
+    position: relative;
+    margin: 44px auto 0 auto;
+
+    &:before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      border-top: 13px solid #ffffff;
+      border-left: 13px solid transparent;
+      border-right: 13px solid transparent;
+      margin-top: 24px;
+      margin-left: 14px;
+    }
+
+    &:after {
+      content: '';
+      position: absolute;
+      left: 4px;
+      top: 0;
+      border-top: 9px solid @color-blue-caret-out;
+      border-left: 9px solid transparent;
+      border-right: 9px solid transparent;
+      margin-top: 24px;
+      margin-left: 14px;
+    }
+  }
+}
+
+
+@media only screen and (min-width: 768px) {
+  #header-2 {
+    .main-nav {
+      .nav {
+        .dropdown-menu {
+          background-color: @color-green;
+
+          &:before {
+            border-bottom: 10px solid @color-green;
+          }
+
+          li {
+            a {
+              font-weight: bold;
+            }
+          }
+        }
+      }
+    }
+  }
+}
+
+.node-type-smart-method.modal-open {
+  .modal-footer {
+    .btn.btn-primary.button_save_modal {
+	  display: block !important;
+	  width: 78px !important;
+	  margin-left: 71% !important;
+	  margin-bottom: -21px !important;
+	}
+  }
+}

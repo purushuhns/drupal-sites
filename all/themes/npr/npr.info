@@ -1,0 +1,155 @@
+name = NPR City Tour Theme
+description = Bootstrap based theme created for Morgan Stanley
+core = 7.x
+
+;;;;;;;;;;;;;;;;;;;;;
+;; Regions
+;;;;;;;;;;;;;;;;;;;;;
+
+regions[navigation]     = 'Navigation'
+regions[header]         = 'Top Bar'
+regions[highlighted]    = 'Highlighted'
+regions[help]           = 'Help'
+regions[content]        = 'Content'
+regions[sidebar_first]  = 'Primary'
+regions[sidebar_second] = 'Secondary'
+regions[footer]         = 'Footer'
+regions[page_top]       = 'Page top'
+regions[page_bottom]    = 'Page bottom'
+
+;;;;;;;;;;;;;;;;;;;;;
+;; Theme Specific Regions
+;;;;;;;;;;;;;;;;;;;;;
+
+regions[homepage_news] = Homepage News
+
+scripts[] = 'js/bootstrap-hover-dropdown.min.js'
+
+scripts[] = 'js/bootstrap.min.js'
+
+scripts[] = 'js/contact-form.php'
+scripts[] = 'js/count.down.min.js'
+scripts[] = 'js/headroom.js'
+scripts[] = 'js/html5shiv.js'
+scripts[] = 'js/jquery-1.11.1.min.js'
+scripts[] = 'js/bootstrap.js'
+
+scripts[] = 'js/jquery.counterup.js'
+scripts[] = 'js/jquery.counterup.min.js'
+scripts[] = 'js/jquery.headroom.js'
+scripts[] = 'js/jquery.isotope.min.js'
+scripts[] = 'js/jquery.magnific-popup.js'
+scripts[] = 'js/jquery.magnific-popup.min.js'
+
+scripts[] = 'js/modernizr.custom.js'
+scripts[] = 'js/owl.carousel.js'
+scripts[] = 'js/owl.carousel.min.js'
+
+scripts[] = 'js/respond.min.js'
+scripts[] = 'js/sendmail.js'
+scripts[] = 'js/waypoints.js'
+scripts[] = 'js/waypoints.min.js'
+
+scripts[] = 'js/apigee.js'
+scripts[] = 'js/jquery-ui.min.js'
+scripts[] = 'js/bskit-scripts.js'
+
+stylesheets[all][] = css/ms-smartdocs.css
+stylesheets[all][] = css/ms.css
+stylesheets[all][] = css/blog-1.css
+stylesheets[all][] = css/bootstrap.min.css
+stylesheets[all][] = css/contact-1.css
+stylesheets[all][] = css/contact-2.css
+stylesheets[all][] = css/contact-3.css
+stylesheets[all][] = css/content1-1.css
+stylesheets[all][] = css/content1-2.css
+stylesheets[all][] = css/content1-3.css
+stylesheets[all][] = css/content1-4.css
+stylesheets[all][] = css/content1-5.css
+stylesheets[all][] = css/content1-6.css
+stylesheets[all][] = css/content1-7.css
+stylesheets[all][] = css/content1-8.css
+stylesheets[all][] = css/content1-9.css
+stylesheets[all][] = css/content2-1.css
+stylesheets[all][] = css/content2-10.css
+stylesheets[all][] = css/content2-2.css
+stylesheets[all][] = css/content2-3.css
+stylesheets[all][] = css/content2-4.css
+stylesheets[all][] = css/content2-5.css
+stylesheets[all][] = css/content2-6.css
+stylesheets[all][] = css/content2-7.css
+stylesheets[all][] = css/content2-8.css
+stylesheets[all][] = css/content2-9.css
+stylesheets[all][] = css/content3-1.css
+stylesheets[all][] = css/content3-10.css
+stylesheets[all][] = css/content3-11.css
+stylesheets[all][] = css/content3-2.css
+stylesheets[all][] = css/content3-3.css
+stylesheets[all][] = css/content3-4.css
+stylesheets[all][] = css/content3-5.css
+stylesheets[all][] = css/content3-6.css
+stylesheets[all][] = css/content3-7.css
+stylesheets[all][] = css/content3-8.css
+stylesheets[all][] = css/content3-9.css
+stylesheets[all][] = css/font-awesome.css
+stylesheets[all][] = css/font-awesome.min.css
+stylesheets[all][] = css/footer-1.css
+stylesheets[all][] = css/footer-2.css
+stylesheets[all][] = css/footer-3.css
+stylesheets[all][] = css/footer-4.css
+stylesheets[all][] = css/footer-5.css
+stylesheets[all][] = css/footer-6.css
+stylesheets[all][] = css/gallery-1.css
+stylesheets[all][] = css/gallery-2.css
+stylesheets[all][] = css/grabbing.png
+stylesheets[all][] = css/header-1.css
+stylesheets[all][] = css/header-2.css
+stylesheets[all][] = css/header-3.css
+stylesheets[all][] = css/linecons.css
+stylesheets[all][] = css/magnific-popup.css
+stylesheets[all][] = css/owl.carousel.css
+stylesheets[all][] = css/owl.theme.css
+stylesheets[all][] = css/owl.transitions.css
+stylesheets[all][] = css/pricing-tables-1.css
+stylesheets[all][] = css/pricing-tables-2.css
+stylesheets[all][] = css/promo-1.css
+stylesheets[all][] = css/promo-2.css
+stylesheets[all][] = css/promo-3.css
+stylesheets[all][] = css/shop-1.css
+stylesheets[all][] = css/shop-2.css
+stylesheets[all][] = css/shop-3.css
+stylesheets[all][] = css/shop-4.css
+stylesheets[all][] = css/shop-5.css
+stylesheets[all][] = css/shop-6.css
+stylesheets[all][] = css/shop-7.css
+stylesheets[all][] = css/style-library-1.css
+stylesheets[all][] = css/team-1.css
+stylesheets[all][] = css/team-2.css
+stylesheets[all][] = css/style.css
+exclude[css][] = 'misc/vertical-tabs.css'
+exclude[css][] = 'modules/aggregator/aggregator.css'
+; Necessary administrative block CSS.
+; exclude[css][] = 'modules/block/block.css'
+exclude[css][] = 'modules/book/book.css'
+exclude[css][] = 'modules/comment/comment.css'
+exclude[css][] = 'modules/dblog/dblog.css'
+exclude[css][] = 'modules/file/file.css'
+exclude[css][] = 'modules/filter/filter.css'
+exclude[css][] = 'modules/forum/forum.css'
+exclude[css][] = 'modules/help/help.css'
+exclude[css][] = 'modules/menu/menu.css'
+exclude[css][] = 'modules/node/node.css'
+exclude[css][] = 'modules/openid/openid.css'
+exclude[css][] = 'modules/poll/poll.css'
+exclude[css][] = 'modules/search/search.css'
+exclude[css][] = 'modules/statistics/statistics.css'
+exclude[css][] = 'modules/syslog/syslog.css'
+exclude[css][] = 'modules/system/maintenance.css'
+exclude[css][] = 'modules/system/system.maintenance.css'
+exclude[css][] = 'modules/system/system.menus.css'
+exclude[css][] = 'modules/system/system.messages.css'
+exclude[css][] = 'modules/system/system.theme.css'
+exclude[css][] = 'modules/taxonomy/taxonomy.css'
+exclude[css][] = 'modules/tracker/tracker.css'
+exclude[css][] = 'modules/update/update.css'
+exclude[css][] = 'modules/user/user.css'

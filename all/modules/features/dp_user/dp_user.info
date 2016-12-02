@@ -1,0 +1,6 @@
+name = DP: User
+description = Custom user settings.
+core = 7.x
+package = DP
+version = 7.x-1.0-20160727dev1
+dependencies[] = user

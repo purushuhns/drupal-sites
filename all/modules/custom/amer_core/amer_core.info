@@ -1,0 +1,4 @@
+name = AIG Core
+description = AIG Core helper module with helper functions for the poc.
+package = Custom
+core = 7.x

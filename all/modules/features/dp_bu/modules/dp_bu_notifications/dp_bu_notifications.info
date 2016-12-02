@@ -1,0 +1,14 @@
+name = DP: Business Unit: Notifications
+description = Provides default email notifications for Business Unit members.
+core = 7.x
+package = DP
+version = 7.x-1.0-20160822dev1
+dependencies[] = dp_bu
+dependencies[] = entity
+dependencies[] = rules
+features[features_api][] = api:2
+features[rules_config][] = og_bu_member_subscribe_active_
+features[rules_config][] = og_bu_member_subscribe_blocked_
+features[rules_config][] = og_bu_member_subscribe_pending_
+features[rules_config][] = og_og_bu_member_removed
+project path = sites/all/modules/features/dp_bu/modules

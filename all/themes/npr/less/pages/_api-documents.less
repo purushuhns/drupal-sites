@@ -1,0 +1,88 @@
+.api-documents-page {
+  margin-top: 70px;
+
+  .api-navigation {
+    .new-inner {
+      padding-bottom: 15px;
+
+      h2 {
+        .font--futurapt-book();
+        font-size: 24px;
+        margin-bottom: 5px;
+
+        &:first-of-type {
+          margin-top: 0;
+        }
+      }
+
+      p {
+        margin: 0;
+
+        a {
+          color: @color-blue;
+        }
+      }
+    }
+
+    // OLD STUFF
+    .inner {
+      position: relative;
+      height: auto;
+      overflow: scroll;
+      text-align: center;
+
+      @media (min-width: 992px) {
+        position: fixed;
+        height: 500px;
+        text-align: left;
+      }
+
+      p.MsoToc1, p.MsoToc2, p.MsoToc3 {
+        margin-bottom: 0;
+      }
+
+      .MsoHyperlink {
+        margin-left: 20px;
+        a {
+          color: @color-green;
+        }
+      }
+
+      a {
+        &:hover, &:focus {
+          color: @color-blue;
+          text-decoration: none;
+        }
+
+        h3 {
+          margin-left: 10px;
+          font-size: 20px;
+        }
+      }
+    }
+  }
+
+  .api-content {
+    h1 {
+      a {
+        color: @color-grey-text;
+        font-size: 36px;
+      }
+    }
+
+    h2 {
+      a {
+        color: @color-grey-text;
+        font-size: 22px;
+        font-weight: bold;
+      }
+    }
+
+    h3 {
+      a {
+        color: @color-grey-text;
+        font-size: 22px;
+      }
+    }
+  }
+}

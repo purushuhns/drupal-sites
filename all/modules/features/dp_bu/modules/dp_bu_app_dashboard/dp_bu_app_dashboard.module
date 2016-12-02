@@ -1,0 +1,147 @@
+<?php
+
+/**
+ * @file
+ * Code for the DP: Business Unit: App Dashboard feature.
+ */
+
+include_once 'dp_bu_app_dashboard.features.inc';
+
+/**
+ * @file
+ * Module file for DP: BU: App Dashboard.
+ */
+
+/**
+ * Implements hook_modules_installed().
+ */
+function dp_bu_app_dashboard_modules_installed($modules) {
+  if (in_array('dp_bu_app_dashboard', $modules)) {
+    // Let feature to revert itself when it gets installed.
+    features_revert_module('dp_bu_app_dashboard');
+  }
+}
+
+/**
+ * Implements hook_menu().
+ */
+function dp_bu_app_dashboard_menu() {
+  $items = array();
+
+  $items['node/%node/app-dashboard'] = array(
+    'title' => 'App dashboard',
+    'description' => 'Manage apps which belongs to this Business Unit.',
+    'access callback' => 'dp_bu_app_dashboard_on_tab_access_callback',
+    'access arguments' => array(1),
+    'page callback' => 'dp_bu_app_dashboard_on_tab_page_callback',
+    'page arguments' => array(1),
+    'type' => MENU_LOCAL_TASK,
+  );
+
+  return $items;
+}
+
+/**
+ * Access callback for node/%node/app-dashboard path.
+ *
+ * @param \stdClass $node
+ *   Node object.
+ *
+ * @return bool
+ *   TRUE or FALSE.
+ */
+function dp_bu_app_dashboard_on_tab_access_callback(stdClass $node) {
+  if ($node->type != 'business_unit') {
+    return FALSE;
+  }
+
+  global $user;
+  // Drupal admin and platform owners always have access.
+  $administrator_role = user_role_load_by_name(DP_USER_ROLE_ADMINISTRATOR);
+  $platform_owner_role = user_role_load_by_name(DP_USER_ROLE_PLATFORM_OWNER);
+  if ($user->uid == 1 || ($administrator_role && user_has_role($administrator_role->rid, $user)) || ($platform_owner_role && user_has_role($platform_owner_role->rid, $user))) {
+    return TRUE;
+  }
+  // Administrator members and product managers always have access.
+  $user_roles_in_bu = og_get_user_roles('node', $node->nid);
+  if (in_array(OG_ADMINISTRATOR_ROLE, $user_roles_in_bu) || in_array(DP_BU_OG_ROLE_PRODUCT_MANAGER, $user_roles_in_bu)) {
+    return TRUE;
+  }
+
+  return FALSE;
+}
+
+/**
+ * Page callback for node/%node/app-dashboard path.
+ *
+ * @param \stdClass $node
+ *   Node object.
+ *
+ * @return string
+ *   Rendered content.
+ */
+function dp_bu_app_dashboard_on_tab_page_callback(stdClass $node) {
+  // Pass pre-loaded node object to
+  // dp_bu_app_dashboard_query_dp_bu_app_dashboard_alter().
+  drupal_static(__FUNCTION__, $node);
+  $view = views_get_view('dp_bu_app_dashboard');
+  $view->set_display('page');
+  return $view->preview('page');
+}
+
+/**
+ * Implements hook_views_api_alter().
+ */
+function dp_bu_app_dashboard_views_api_alter(&$list) {
+  $list['dp_bu_app_dashboard']['path'] = drupal_get_path('module', 'dp_bu_app_dashboard') . '/views';
+}
+
+/**
+ * Implements hook_dp_app_dashboard_cached_data_alter().
+ */
+function dp_bu_app_dashboard_dp_app_dashboard_cached_data_alter(&$fields, $app, $product) {
+  $bus_of_api_products = dp_bu_get_business_units_of_api_products();
+  $fields['bu_name'] = isset($bus_of_api_products[$product]) ? $bus_of_api_products[$product] : '';
+}
+
+/**
+ * Implements hook_query_TAG_alter().
+ */
+function dp_bu_app_dashboard_query_dp_bu_app_dashboard_alter(QueryAlterableInterface $query) {
+  global $user;
+
+  // Add membership table to this query.
+  $query->join('og_membership', 'om', 'field_data_field_bu_name_dp_app_dashboard.entity_id = om.gid');
+  $query->distinct();
+
+  // Limit list on node/%node/app-dashboard path to those developer apps,
+  // which belongs to the given Business Unit.
+  $node = &drupal_static('dp_bu_app_dashboard_on_tab_page_callback', FALSE);
+  if ($node) {
+    $query->condition('om.gid', $node->nid);
+  }
+
+  // Don't apply further membership based limitations for uid=1,
+  // administrators and platform owners.
+  $administrator_role = user_role_load_by_name(DP_USER_ROLE_ADMINISTRATOR);
+  $platform_owner_role = user_role_load_by_name(DP_USER_ROLE_PLATFORM_OWNER);
+  if ($user->uid == 1 || ($administrator_role && user_has_role($administrator_role->rid, $user)) || ($platform_owner_role && user_has_role($platform_owner_role->rid, $user))) {
+    return;
+  }
+
+  // Only show those Apps which belongs to those Business Units which ones
+  // the current user is the member of.
+  $query->condition('om.state', OG_STATE_ACTIVE);
+  $query->condition('om.entity_type', 'user');
+  $query->condition('om.etid', $user->uid);
+}
+
+/**
+ * Implements hook_views_pre_view().
+ */
+function dp_bu_app_dashboard_views_pre_view(&$view, &$display_id, &$args) {
+  if ($view->name == 'dp_bu_app_dashboard') {
+    // Restore "Refresh table" button.
+    dp_app_dashboard_add_refresh_button_to_view($view, $display_id);
+  }
+}

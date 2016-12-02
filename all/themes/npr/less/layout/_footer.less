@@ -1,0 +1,31 @@
+.copyright-bar {
+  background-color: @color-grey-background;
+  padding-top: 20px;
+  position: fixed;
+  bottom: 0px;
+  width: 100%;
+  z-index:100;
+
+  .navbar-nav {
+    margin: 0 auto;
+    clear: both;
+    text-align: center;
+    display: inline-block;
+    float: none;
+
+    li.nav-item {
+      a {
+        color: @color-white;
+
+        &:hover {
+          background-color: transparent;
+          color: @color-blue;
+        }
+      }
+    }
+  }
+
+  .navbar-collapse {
+    text-align: center;
+  }
+}

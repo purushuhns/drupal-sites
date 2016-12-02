@@ -1,0 +1,16 @@
+name = DP: Business Unit: App Dashboard Notifications
+description = E-mail notifications about changes made on App Dashboard for Business Units 
+core = 7.x
+package = DP
+version = 7.x-1.0-20160824dev1
+dependencies[] = devconnect_developer_apps
+dependencies[] = dp_app_dashboard
+dependencies[] = dp_bu
+dependencies[] = entity
+dependencies[] = og
+dependencies[] = rules
+features[features_api][] = api:2
+features[rules_config][] = rules_bu_app_dashboard_app_created_pending_approval_
+features[rules_config][] = rules_bu_app_dashboard_apps_credentials_approved_for_a_product
+features[rules_config][] = rules_bu_app_dashboard_apps_credentials_revoked_for_a_product
+project path = sites/all/modules/features/dp_bu/modules/dp_bu_app_dashboard/modules

@@ -1,0 +1,7 @@
+name = DP Image Optimization
+core = 7.x
+package = DP
+version = 7.x-1.0
+dependencies[] = image
+features[features_api][] = api:2
+features[image][] = catalog_images

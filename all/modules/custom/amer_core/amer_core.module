@@ -1,0 +1,169 @@
+<?php
+/*
+ * Implements hook_devconnect_developer_app_details_alter().
+ */
+use Drupal\devconnect_developer_apps\ApiProductEntity;
+
+function amer_core_devconnect_developer_app_details_alter(&$tabs, &$panes) {
+
+  // SDK tab.
+  $tabs[] = array(
+    'text' => 'SDK',
+    'path' => '#sdk',
+  );
+
+  $panes[] = array(
+    '#id' => 'sdk',
+    '#weight' => 4,
+    'pane_title' => array(
+      '#type' => 'markup',
+      '#markup' => 'SDK',
+      '#prefix' => '<h3>',
+      '#suffix' => '</h3>',
+      '#height' => '0',
+    ),
+    'details' => array(
+      '#weight' => '2',
+      'sdk' => array(
+        '#prefix' => '<div class="app-sdk-detail well">',
+        'content' => array(
+          '#type' => 'markup',
+          '#markup' => 'This app doesn’t have any SDKs yet.',
+          '#prefix' => '<p>',
+          '#suffix' => '</p>',
+        ),
+        '#suffix' => '</div>',
+      ),
+    ),
+  );
+
+  // Load the content.
+  $smartdocs_vocab_name = taxonomy_vocabulary_machine_name_load('smartdocs_models');
+  $smartdocs_tree = taxonomy_get_tree($smartdocs_vocab_name->vid);
+  $first_smardocs = $smartdocs_tree[0];
+
+  $content = views_embed_view($first_smardocs->name . '_methods', 'frontpage');
+
+  // Api tab.
+  $tabs[] = array(
+    'text' => 'Api',
+    'path' => '#api',
+  );
+
+  $panes[] = array(
+    '#id' => 'api',
+    '#weight' => 5,
+    'pane_title' => array(
+      '#type' => 'markup',
+      '#markup' => 'API',
+      '#prefix' => '<h3>',
+      '#suffix' => '</h3>',
+      '#height' => '0',
+    ),
+    'details' => array(
+      '#weight' => '1',
+      '#type' => 'markup',
+      '#markup' => $content,
+    ),
+  );
+
+  // New order of the tabs.
+  $neworder = array(
+    $tabs[0],
+    $tabs[5],
+    $tabs[4],
+    $tabs[3],
+    $tabs[2],
+    $tabs[1],
+  );
+
+  $tabs = $neworder;
+}
+
+/**
+ * Implements hook_form_alter().
+ */
+function amer_core_form_alter(&$form, &$form_state, $form_id) {
+  if ($form_id == 'devconnect_developer_apps_edit_form') {
+
+    $api_product_ids = array_map(function ($product_name) {
+      return str_replace('prod-', '', $product_name);
+    }, array_keys($form['api_product']['#options']));
+    if (!empty($api_product_ids)) {
+      $api_entities = entity_load('api_product', $api_product_ids);
+      $api_entities_ww = array();
+
+      foreach ($api_entities as $api_entity) {
+        if (isset($api_entity->attributes['Weight'])) {
+          $api_entities_ww[$api_entity->name] = $api_entity;
+
+          uasort($api_entities_ww, "_amer_core_weight_compare");
+        }
+      }
+
+      $form['api_product']['#options'] = _amer_core_create_options($api_entities_ww);
+    }
+  }
+
+  if ($form_id == 'user_login') {
+    $form['account_settings'] = array(
+      '#type' => 'fieldset',
+      '#title' => '',
+      '#collapsible' => FALSE,
+      '#collapsed' => FALSE,
+    );
+    $form['account_settings']['name'] = $form['name'];
+    $form['account_settings']['pass'] = $form['pass'];
+    unset($form['name']);
+    unset($form['pass']);
+
+    $form['account_settings']['name']['#attributes']['placeholder'] = 'Username or Email';
+    $form['account_settings']['name']['#attributes']['class'][] = 'form-control';
+    $form['account_settings']['name']['#description'] = '';
+    $form['account_settings']['name']['#title'] = 'Username or Email';
+	$form['account_settings']['name']['#title_display'] = 'invisible';
+    $form['account_settings']['pass']['#attributes']['placeholder'] = 'Password';
+    $form['account_settings']['pass']['#attributes']['class'][] = 'form-control';
+    $form['account_settings']['pass']['#description'] = '';
+    $form['account_settings']['pass']['#title'] = 'Password';
+	$form['account_settings']['pass']['#title_display'] = 'invisible';
+    $form['actions']['submit']['#value'] = 'Sign in';
+    $form['actions']['submit']['#attributes']['class'][] = 'btn';
+    $form['actions']['submit']['#attributes']['class'][] = 'btn-primary';
+  }
+}
+
+/**
+ * Helper function to short API Products by their weight.
+ */
+function _amer_core_weight_compare(ApiProductEntity $a, ApiProductEntity $b) {
+  if ($a->attributes['Weight'] == $b->attributes['Weight']) {
+    return strcmp($a->displayName, $b->displayName);
+  }
+
+  return ($a->attributes['Weight'] < $b->attributes['Weight']) ? -1 : 1;
+}
+
+/**
+ * Helper function to create new form options.
+ *
+ * @param $entity_list
+ *
+ * @return array
+ */
+function _amer_core_create_options($entity_list) {
+  $options = array();
+  foreach ($entity_list as $entity) {
+    $name_prefix = end($entity->environments);
+    if ($name_prefix) {
+      $index = $name_prefix . '-' . $entity->name;
+    }
+    else {
+      $index = $entity->name;
+    }
+    $value = $entity->displayName;
+    $options[$index] = $value;
+  }
+
+  return $options;
+}

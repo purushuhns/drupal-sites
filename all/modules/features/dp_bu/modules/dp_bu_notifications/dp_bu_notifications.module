@@ -1,0 +1,16 @@
+<?php
+
+/**
+ * @file
+ * Module file for DP: BU: Notifications.
+ */
+
+/**
+ * Implements hook_modules_installed().
+ */
+function dp_bu_notifications_modules_installed($modules) {
+  if (in_array('dp_bu_notifications', $modules)) {
+    // Let feature to revert itself when it gets installed.
+    features_revert_module('dp_bu_notifications');
+  }
+}

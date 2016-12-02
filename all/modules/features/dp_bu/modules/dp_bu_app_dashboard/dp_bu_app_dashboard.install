@@ -1,0 +1,56 @@
+<?php
+
+/**
+ * @file
+ * Install, update and uninstall functions for the DP: BU: App Dashboard module.
+ */
+
+/**
+ * Implements hook_schema_alter().
+ */
+function dp_bu_app_dashboard_schema_alter(&$schema) {
+  $schema['dp_app_dashboard']['fields']['bu_name'] = array(
+    'type' => 'varchar',
+    'size' => 'normal',
+    'length' => 255,
+    'default' => '',
+    'description' => 'Name of the Business Unit, which this app belongs to.',
+  );
+  $schema['dp_app_dashboard']['indexes']['app_name_bu_name'] = array('name', 'bu_name');
+  $schema['dp_app_dashboard']['indexes']['app_uuid_bu_name'] = array('app_id', 'bu_name');
+}
+
+/**
+ * Implements hook_install().
+ */
+function dp_bu_app_dashboard_install() {
+  db_add_field('dp_app_dashboard', 'bu_name', array(
+    'type' => 'varchar',
+    'size' => 'normal',
+    'length' => 255,
+    'default' => '',
+    'description' => 'Name of the Business Unit, which this app belongs to.',
+  ));
+  db_add_index('dp_app_dashboard', 'app_name_bu_name', array('name', 'bu_name'));
+  db_add_index('dp_app_dashboard', 'app_uuid_bu_name', array('app_id', 'bu_name'));
+  // Update locally cached data with BU Names.
+  _dp_app_dashboard_reset_local_cache();
+
+  // Disable original App dashboard view.
+  $views_status = variable_get('views_defaults', array());
+  $views_status['dp_app_dashboard'] = TRUE;
+  variable_set('views_defaults', $views_status);
+  views_invalidate_cache();
+}
+
+/**
+ * Implements hook_uninstall().
+ */
+function dp_bu_app_dashboard_uninstall() {
+  db_drop_field('dp_app_dashboard', 'bu_name');
+  // Enable original App dashboard view.
+  $views_status = variable_get('views_defaults', array());
+  $views_status['dp_app_dashboard'] = FALSE;
+  variable_set('views_defaults', $views_status);
+  views_invalidate_cache();
+}

@@ -1,0 +1,7 @@
+<?php
+/**
+ * @file
+ * Code for the DP Aggregate Files feature.
+ */
+
+include_once 'dp_aggregate_files.features.inc';

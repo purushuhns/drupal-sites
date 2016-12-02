@@ -1,0 +1,102 @@
+#admin-menu {
+	position:relative !important;
+}
+
+div.breadcrumb {
+  padding: 45px 0 25px 0;
+  margin-bottom: 0px;
+  list-style: none;
+  background-color: inherit; 
+}
+
+div#admin-menu {
+	-webkit-box-shadow: none !important;
+}
+
+#header-2 {
+	min-height: 55px !important;
+}
+
+#content-2-1 {
+	padding: 150px 0 60px 0 !important;
+}
+
+div.lead > p {
+	font-size:24px;
+	line-height: 36px;
+}
+
+span.topic-icon {
+    height: 24px;
+    padding: 5px 5px 5px 30px;
+    text-indent: -9999px;
+    width: 24px;
+}
+
+span.label > a {
+	color: #ffffff;
+}
+
+
+img {
+  display: block;
+  max-width: 100%;
+  height: auto;
+}
+
+section#catalog-section-1{
+	padding:60px 0 0 0;
+}
+section#catalog-section-2{
+	padding:30px 0 60px 0;
+}
+div.editContent > h2 {
+	padding-top:30px;
+}
+
+#shop-1-7 {
+	padding-top:0px;
+	margin-top:-15px;
+}
+
+img#apigee-logo {
+	display: inline;
+}
+
+div#admin-menu-wrapper {
+	background-color: #000 !important;
+}
+
+div#environment-indicator {
+	background-color: #000 !important;
+}
+
+a img
+{  
+	border-style: none;
+}
+.content-3-8 {
+	padding: 60px 0 0px 0 !important;
+}
+
+.navbar {
+	min-height: 100px !important;
+}
+
+.navbar .divider-vertical {
+height: 50px;
+margin: 0 9px;
+border-right: 1px solid #ffffff;
+border-left: 1px solid #f2f2f2;
+}
+
+.navbar-inverse .divider-vertical {
+border-right-color: #222222;
+border-left-color: #111111;
+}
+
+@media (max-width: 767px) {
+.navbar-collapse .nav > .divider-vertical {
+    display: none;
+  }
+}

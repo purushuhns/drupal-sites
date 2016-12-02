@@ -1,0 +1,101 @@
+<?php
+
+/**
+ * @file
+ * Module file for DP: Smartdocs.
+ */
+
+define('DP_SMARTDOCS_MODEL_SOURCE_FOLDER_PATH', 'public://model_source');
+
+/**
+ * Implements hook_modules_installed().
+ */
+function dp_smartdocs_modules_installed($modules) {
+  if (in_array('dp_smartdocs', $modules)) {
+    // Let feature to revert itself when it gets installed.
+    features_revert_module('dp_smartdocs');
+  }
+}
+
+/**
+ * Implements hook_taxonomy_term_presave().
+ */
+function dp_smartdocs_taxonomy_term_presave($term) {
+  // Store creator of a model when a model term created.
+  if ($term->vocabulary_machine_name == 'smartdocs_models' && !isset($term->tid)) {
+    $emw = entity_metadata_wrapper('taxonomy_term', $term);
+    $emw->field_model_author = $GLOBALS['user']->uid;
+  }
+}
+
+/**
+ * Implements hook_smartdocs_model_import().
+ */
+function dp_smartdocs_smartdocs_model_import($file_contents, $content_type, $document_format, \Apigee\SmartDocs\Model $model, $source) {
+  $model_term = dp_smartdocs_get_smartdocs_model_term_by_model_name($model->getName());
+  if ($model_term) {
+    list(, $type) = explode('/', $content_type);
+    $file = file_save_data($file_contents, DP_SMARTDOCS_MODEL_SOURCE_FOLDER_PATH . '/' . $model->getName() . '-rev' . $model->getLatestRevisionNumber() . '.' . $type);
+    if (!$file) {
+      watchdog(__FUNCTION__, 'Source file of @model model cannot be saved.', array('@model' => $model->getName()), WATCHDOG_ERROR);
+      return;
+    }
+    $emw = entity_metadata_wrapper('taxonomy_term', $model_term);
+    $emw->field_model_source = array(
+      'fid' => $file->fid,
+      'display' => 1,
+    );
+    $emw->field_model_source_format = $document_format;
+    try {
+      $emw->save();
+    }
+    catch (Exception $e) {
+      watchdog_exception(__FUNCTION__, $e, "Source file cannot be stored on @model model's term. Reason: !message", array(
+        '@model' => $model->getName(),
+      ));
+    }
+  }
+}
+
+/**
+ * Implements hook_file_presave().
+ */
+function dp_smartdocs_file_presave($file) {
+  // Fix file type and mime on model source files.
+  // Without this fix type would be 'undefined' which is an undefined
+  // file type (admin/structure/file-types), therefore
+  // file_entity_file_entity_access() would return FILE_ENTITY_ACCESS_IGNORE
+  // so only admin users would be able to see and access files if they
+  // rendered with "Download link" field formatter.
+  // If file mime is not application/json, most browsers does not offer
+  // "Save as" option for users.
+  // @see file_entity_file_entity_access()
+  if ($file->filemime == 'application/octet-stream' && strpos($file->uri, DP_SMARTDOCS_MODEL_SOURCE_FOLDER_PATH) === 0) {
+    $file_name_parts = explode('.', $file->filename);
+    $type = end($file_name_parts);
+    if (in_array($type, array('json', 'yaml'))) {
+      $file->filemime = 'application/' . $type;
+      $file->type = 'document';
+    }
+  }
+}
+
+/**
+ * Returns the Smartdocs model term of an API model, if exists.
+ *
+ * @param $string $name
+ *   Name of the API model.
+ * @param bool $reset
+ *   Reset static cache.
+ *
+ * @return \stdClass|bool
+ *   Model term if exists, FALSE otherwise.
+ */
+function dp_smartdocs_get_smartdocs_model_term_by_model_name($name, $reset = FALSE) {
+  $model_term = &drupal_static(__FUNCTION__ . ':' . $name, FALSE);
+  if (!$model_term || $reset) {
+    $model_term = taxonomy_get_term_by_name($name, 'smartdocs_models');
+    $model_term = reset($model_term);
+  }
+  return $model_term;
+}

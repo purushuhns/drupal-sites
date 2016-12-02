@@ -1,0 +1,14 @@
+name = DP: Business Unit: App Dashboard
+description = Limit list of developer apps on App dashboard based on current user's BU memberships.
+core = 7.x
+package = DP
+version = 7.x-1.0-20160816dev1
+dependencies[] = dp_app_dashboard
+dependencies[] = dp_bu
+dependencies[] = features
+dependencies[] = views
+features[ctools][] = views:views_default:3.0
+features[features_api][] = api:2
+features[views_view][] = dp_bu_app_dashboard
+features_exclude[dependencies][ctools] = ctools
+project path = sites/all/modules/features/dp_bu/modules

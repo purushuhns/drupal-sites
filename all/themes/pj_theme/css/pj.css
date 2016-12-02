@@ -1,0 +1,255 @@
+/*
+This is the css file that will contain all the custom css styles that you will be writing to customize the look of the Apigee developer portal
+*/
+
+.not-logged-in .logo img {
+    height: 70px;
+    margin-top: -3px;
+    margin-bottom: -5px;
+}
+
+.logo img {
+    margin-top: -3px;
+    margin-bottom: -5px;
+}
+
+.logo > img {
+    width: auto;
+}
+
+#environment-indicator {
+    background-color: #3c3c3c !important;
+}
+
+#admin-menu-wrapper {
+    background-color: #3c3c3c !important;
+}
+
+.api-thumbnail {
+    height: 230px;
+    width: 320px;
+    overflow: hidden;
+}
+
+.front .page-header {
+padding-top: 0px;
+background-image: url(../images/banner.jpg);
+background-repeat: no-repeat;
+background-size: 100%;
+background-position: center top;
+position: relative;
+min-height: 400px;
+margin-top: -29px;
+}
+
+.front .hero-text {
+color: #FFFFFF;
+font-size: 22px;
+padding-left: 14px;
+padding-top: 20px;
+padding-bottom: 20px;
+line-height: 30px;
+font-family: helvetica,helvetica,sans-serif;
+font-weight: 100;
+}
+
+
+.front .page-content {
+    background-color: #efefef;
+}
+
+
+.page-header .buttons {
+width: 100%;
+margin: auto;
+margin-left: 600px;
+position: relative;
+top: 90px;
+}
+
+
+.page-header .home-header-btn {
+    margin-bottom: 18px;
+    float: left;
+}
+
+.page-header .home-header-btn a {
+color: #000000;
+display: block;
+padding-top: 20px;
+padding-bottom: 20px;
+padding-left: 20px;
+padding-right: 20px;
+}
+
+.page-header .home-header-btn:hover a {
+    color: #FABD2E;
+}
+
+.page-header .home-header-btn:hover {
+    background-color: #007BC9;
+    color: #ffffff;
+}
+
+.page-header .home-header-btn {
+background-color: #FABD2E;
+margin-right: 50px;
+border: 1px solid #B6BFC3;
+border-radius: 5px;
+font-size: 22px;
+margin-bottom: 18px;
+position: relative;
+}
+
+#user-register-form #edit-legal-accept {
+    width: auto;
+}
+
+.search-form .btn {
+    /*background-color: #F9BD2E;*/
+    color: #444;
+    border-radius:15px;
+    background: #F9BD2E url('../images/search_icon.png') no-repeat 15px 4px;
+    padding: 4px 30px;
+    background-size: 25px;
+    text-transform: none;
+    text-indent: -10000px;
+}
+
+.search-form .btn:hover {
+    /*background-color: #FECC46;*/
+    color: #444;
+    background: #FECC46 url('../images/search_icon.png') no-repeat 15px 4px;
+    padding: 4px 30px;
+    background-size: 25px;
+    text-transform: none;
+    text-indent: -10000px;
+}
+
+#navbar .navbar-nav{
+    margin: 21px 5px -5px;
+}
+
+body.navbar-is-fixed-top{
+    padding-top: 105px!important;
+}
+body.admin-menu.navbar-is-fixed-top{
+    padding-top: 98px !important;
+}
+.navbar .nav > li > a{
+    font-size: 14px;
+    padding: 7px 13px;
+    font-weight: bold;
+}
+.navbar-nav > li > span{
+    padding: 8px 14px;
+    line-height: 36px;
+    text-decoration: none;
+    font-size: 14px;
+    font-weight: bold;
+}
+
+#navbar container{
+    width: 1170px;
+}
+
+.container {
+padding-right: 0px;
+padding-left: 6px;
+margin-right: 0px;
+margin-left: 30px;
+}
+
+a.logo img {
+margin-top: 0px;
+}
+
+.navbar-collapse {
+max-height: 340px;
+padding-right: 0px;
+padding-left: 0px;
+}
+
+.container>.navbar-collapse {
+margin-right: -12px;
+margin-left: 0;
+}
+
+ul.menu.nav.navbar-nav.full-menu.primary-nav.hidden-xs {
+padding-left: 10px;
+}
+
+body .footer .navbar ul.footer-links > li > a {
+color: #007dc6;
+font-size: 10px;
+font-weight: normal;
+}
+
+.footer .navbar {
+margin-bottom: -15px;
+}
+
+body > div.master-container > section > div.container.search-container > div {
+    margin-right: -21px;
+margin-left: -15px;
+margin-top: 6px;
+}
+
+#block-devconnect-homepage-homepage-header > div > div.buttons > div:nth-child(2) > strong > a {
+padding-left: 50px;
+padding-right: 50px;
+}
+
+body > div.master-container > section > div:nth-child(2) > div {
+    position: relative;
+    float:left;
+top: 33px;
+width: 45%;
+padding-bottom: 10px;
+padding-top: 10px;
+margin-right:100px;
+background-color: rgba(249, 244, 215, 0.35);
+border: 1px solid rgba(125, 118, 27, 0.65);
+}
+
+section#block-devconnect-homepage-homepage-header.block.block-devconnect-homepage.clearfix {
+
+}
+
+#user-login > div > a {
+position: relative;
+top: 24px;
+}
+
+#login button#edit-submit {
+position: relative;
+top: -65px;
+}
+
+#login button#edit-submit-google {
+position: relative;
+top: -65px;
+}
+
+#login .modal-footer {
+margin-top: -30px;
+}
+
+body #apigee-sso-signin-block ul.federated-buttons {
+margin: 0;
+padding: 0px;
+margin-top: -11px;
+list-style: none;
+}
+
+#user-login > div > ul > li.openid-link.first.openid-processed > a {
+    display: none;
+}
+
+h1 {
+    font-family: Helvetica-Light,sans-serif;
+}
+
+h2 {
+    font-family: Helvetica-Light,sans-serif;
+}

@@ -1,0 +1,15 @@
+name = DP: App Dashboard
+description = Dashboard to manage developer app credentials.
+core = 7.x
+package = DP
+version = 7.x-1.0-20160518dev1
+dependencies[] = ctools
+dependencies[] = devconnect_developer_apps
+dependencies[] = registry_autoload
+dependencies[] = views
+features[ctools][] = views:views_default:3.0
+features[features_api][] = api:2
+features[views_view][] = dp_app_dashboard
+files[] = views/dp_app_dashboard_edit_field_handler.inc
+project path = sites/all/modules
+registry_autoload[] = PSR-0

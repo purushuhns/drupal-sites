@@ -1,0 +1,35 @@
+.faq-answer  {
+  padding-bottom: 40px;
+  border-bottom: 1px solid #eee;
+  margin-top: 20px;
+  margin-bottom: 20px;
+
+  ul.links.inline {
+    float: right;
+    margin-bottom: 40px;
+
+    a {
+      color: @color-green;
+
+      &:before {
+        display: inline-block;
+        font: normal normal normal 14px/1 FontAwesome;
+        font-size: inherit;
+        text-rendering: auto;
+        -webkit-font-smoothing: antialiased;
+        content: "\f062";
+        padding-right: 1rem;
+      }
+
+      &:hover {
+        text-decoration: underline;
+      }
+    }
+  }
+}
+
+.faq, .node-faq {
+  ul {
+    list-style: disc;
+  }
+}

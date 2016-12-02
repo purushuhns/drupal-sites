@@ -1,0 +1,7 @@
+<?php
+/**
+ * @file
+ * Code for the DP Image Optimization feature.
+ */
+
+include_once 'dp_image_optimization.features.inc';

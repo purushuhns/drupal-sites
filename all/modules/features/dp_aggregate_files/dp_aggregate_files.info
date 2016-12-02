@@ -1,0 +1,16 @@
+name = DP Aggregate Files
+description = Contains the information about aggregating the JS and css files
+core = 7.x
+package = DP
+version = 7.x-1.0
+dependencies[] = advagg
+dependencies[] = advagg_css_compress
+dependencies[] = advagg_js_compress
+dependencies[] = ctools
+dependencies[] = strongarm
+features[ctools][] = strongarm:strongarm:1
+features[features_api][] = api:2
+features[variable][] = advagg_css_compress_inline
+features[variable][] = advagg_css_compress_inline_if_not_cacheable
+features[variable][] = advagg_css_compressor
+features[variable][] = advagg_js_compressor

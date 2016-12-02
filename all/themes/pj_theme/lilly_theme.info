@@ -1,0 +1,44 @@
+name = Papa Johns Dev Portal Custom Theme
+description = A starter theme for the Apigee developer portal with the apigee responsive theme as the base
+core = 7.x
+base theme = apigee_responsive
+
+
+;;;;;;;;;;;;;;;;;;;;;
+;; Regions
+;;;;;;;;;;;;;;;;;;;;;
+
+regions[navigation]     = 'Navigation'
+regions[header]         = 'Top Bar'
+regions[highlighted]    = 'Highlighted'
+regions[help]           = 'Help'
+regions[content]        = 'Content'
+regions[sidebar_first]  = 'Primary'
+regions[sidebar_second] = 'Secondary'
+regions[footer]         = 'Footer'
+regions[page_top]       = 'Page top'
+regions[page_bottom]    = 'Page bottom'
+
+;;;;;;;;;;;;;;;;;;;;;
+;; Apigee Specific Regions
+;;;;;;;;;;;;;;;;;;;;;
+
+regions[homepage_header] = Homepage Header
+regions[frontpage_panel_left] = Frontpage Panel Left
+regions[frontpage_panel_center] = Frontpage Panel Center
+regions[frontpage_panel_right] = Frontpage Panel Right
+
+settings[header_bg_color] = #ffffff
+settings[header_txt_color] = #000000
+settings[header_hover_bg_color] = #F17101
+settings[header_hover_txt_color] = #FFFFFF
+settings[link_color] = #ec881d
+settings[link_hover_color] = #ec881d
+settings[footer_bg_color] = #FFFFFF
+settings[footer_link_color] = #0B4965
+settings[footer_link_hover_color] = #0B4965
+settings[button_background_color] = #3b3b3b
+settings[button_text_color] = #FFFFFF
+
+stylesheets[all][] = css/pj.css
+scripts[] = js/pj.js

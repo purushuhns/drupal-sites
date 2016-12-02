@@ -1,0 +1,297 @@
+<?php
+
+/**
+ * @file
+ * Module file for DP: Hacks.
+ */
+
+/**
+ * Implements hook_menu_alter().
+ */
+function dp_hacks_menu_alter(&$items) {
+  // Nobody should have access to /node path.
+  $items['node']['access callback'] = FALSE;
+}
+
+/**
+ * Implements hook_entity_info_alter().
+ *
+ * Let's use this hotfix until either this
+ * https://apigeesc.atlassian.net/browse/DEVSOL-2234
+ * or this issue
+ * https://apigeesc.atlassian.net/browse/DEVSOL-2232
+ * will not get fixed.
+ */
+function dp_hacks_entity_info_alter(&$info) {
+  if (isset($info['api_product'])) {
+    $info['api_product']['entity keys']['id'] = 'name';
+  }
+}
+
+/**
+ * Implements hook_entity_property_info_alter().
+ *
+ * Let's keep it here as-is until we cannot agree the scope of this fix here:
+ * https://apigeesc.atlassian.net/browse/DEVSOL-2232
+ */
+function dp_hacks_entity_property_info_alter(&$info) {//print_r($info);exit;
+  if (isset($info['developer_app']['properties'])) {
+    $info['developer_app']['properties'] = array(
+      'developerId' => array(
+        'label' => t('Developer ID'),
+        'description' => t('UUID of the developer who owns the app.'),
+        'type' => 'text',
+      ),
+      'developer' => array(
+        'label' => t('Developer'),
+        'description' => t('User who owns the app.'),
+        'type' => 'user',
+        // TODO Override setter callback also?
+        'getter callback' => 'dp_hacks_entity_user_property_get',
+        'raw getter callback' => 'dp_hacks_entity_user_property_get_raw',
+      ),
+      'accessType' => array(
+        'label' => t('Access Type'),
+        // 'description' => t(''),
+        'type' => 'text',
+        'options list' => '_dp_hacks_list_of_possible_access_types',
+      ),
+      'apiProducts' => array(
+        'label' => t('API Products'),
+        'description' => t('List of API Products which an app can communicate with.'),
+        'type' => 'list<api_product>',
+      ),
+      'appFamily' => array(
+        'label' => t('App Family'),
+        'description' => t('The app family containing the app.'),
+        'type' => 'text',
+      ),
+      'appId' => array(
+        'label' => t('App ID'),
+        'description' => t('UUID of app.'),
+        'type' => 'text',
+      ),
+      'attributes' => array(
+        'label' => t('Attributes'),
+        'description' => t('Custom attributes of app.'),
+        'type' => 'list<text>',
+      ),
+      'callbackUrl' => array(
+        'label' => t('Callback URL'),
+        'description' => t('Callback URL of app. Callback URL is only required for 3-legged OAuth.'),
+        'type' => 'uri',
+      ),
+      'createdAt' => array(
+        'label' => t('Created'),
+        'description' => t("App's creation date."),
+        'type' => 'date',
+        'getter callback' => 'dp_hacks_entity_date_property_get',
+        'setter callback' => 'dp_hacks_entity_date_property_set',
+      ),
+      'createdBy' => array(
+        'label' => t('Created by'),
+        'description' => t('User who created the app.'),
+        'type' => 'user',
+        'getter callback' => 'dp_hacks_entity_user_property_get',
+        'raw getter callback' => 'dp_hacks_entity_user_property_get_raw',
+      ),
+      'modifiedAt' => array(
+        'label' => t('Modified'),
+        'description' => t("App's last modification date."),
+        'type' => 'date',
+        'getter callback' => 'dp_hacks_entity_date_property_get',
+        'setter callback' => 'dp_hacks_entity_date_property_set',
+      ),
+      'modifiedBy' => array(
+        'label' => t('Modified by'),
+        'description' => t('User who last modified the app.'),
+        'type' => 'user',
+        'getter callback' => 'dp_hacks_entity_user_property_get',
+        'raw getter callback' => 'dp_hacks_entity_user_property_get_raw',
+      ),
+      // Primary key, but it is not a machine name.
+      'name' => array(
+        'label' => t('Name'),
+        'description' => t('Name of the app.'),
+        'type' => 'text',
+      ),
+      'scopes' => array(
+        'label' => t('Scopes'),
+        //'description' => t(''),
+        'type' => 'list<text>',
+      ),
+      'status' => array(
+        'label' => t('Status'),
+        'description' => t('Status of the app.'),
+        'type' => 'text',
+        'options list' => '_dp_hacks_list_of_possible_statuses',
+      ),
+      'description' => array(
+        'label' => t('Description'),
+        'description' => t('Description of app.'),
+        'type' => 'text',
+      ),
+      'credentialApiProducts' => array(
+        'label' => t("App's credentials status for API Products"),
+        'description' => t("Current status of app's credentials for those API Products which the given app can communicate with."),
+        // TODO use custom data type?
+        'type' => 'list<text>',
+      ),
+      'consumerKey' => array(
+        'label' => t('Consumer key'),
+        'description' => t('Consumer key provided by the app.'),
+        'type' => 'text',
+      ),
+      'consumerSecret' => array(
+        'label' => t('Consumer secret'),
+        'description' => t('Consumer secret for consumer key of the app.'),
+        'type' => 'text',
+      ),
+      'credentialStatus' => array(
+        'label' => t("Credential's status"),
+        'description' => t('Status of credential provided by the app.'),
+        'type' => 'text',
+        'options list' => '_dp_hacks_list_of_possible_statuses',
+      ),
+      'credentialAttributes' => array(
+        'label' => t("Credential's attributes"),
+        'description' => t('Attributes of credential provided by the app.'),
+        'type' => 'list<text>',
+      ),
+      'credentialIssuedAt' => array(
+        'label' => t('Issued date of credential'),
+        'description' => t('Issued date of credential provided by the app.'),
+        // We cannot use date type, because it could be "-1".
+        // @see DeveloperAppEntity
+        'type' => 'integer',
+      ),
+      'credentialExpiresAt' => array(
+        'label' => t('Expiration date of credential'),
+        'description' => t('Expiration date of credential provided by the app.'),
+        // We cannot use date type, because it could be "-1".
+        // @see DeveloperAppEntity
+        'type' => 'integer',
+      ),
+      'keyExpiry' => array(
+        'label' => t('Key expiry'),
+        'description' => t('On app creation, the number of milliseconds until the newly-created key expires.'),
+        // We cannot use date type, because it could be "-1".
+        // @see DeveloperAppEntity
+        'type' => 'integer',
+      ),
+      'overallStatus' => array(
+        'label' => t("Overall status"),
+        'description' => t("Overall status of the app based on app's status and app's credential's status."),
+        'type' => 'text',
+        'options list' => '_dp_hacks_list_of_possible_statuses',
+      ),
+      // TODO Does it really necessary here?
+      'debugData' => array(
+        'label' => t('Debug data'),
+        'description' => t('Debug data provided by the SDK.'),
+        'type' => 'text',
+      ),
+      // TODO Can we deprecate this?
+      'uid' => array(
+        'label' => t('User'),
+        'description' => t('Drupal user who owns the app.'),
+        'type' => 'user',
+      ),
+    );
+  }
+}
+
+/**
+ * Helper function which returns all possible access types values.
+ *
+ * @return array
+ *   Associative array of possible access types.
+ */
+function _dp_hacks_list_of_possible_access_types() {
+  // @see Apigee\ManagementAPI\AbstractApp
+  return array(
+    '' => t('empty'),
+    'read' => t('read'),
+    'write' => t('write'),
+    'both' => t('both'),
+  );
+}
+
+/**
+ * Helper function which returns all possible app status.
+ *
+ * @return array
+ *   Associative array of possible app statuses.
+ */
+function _dp_hacks_list_of_possible_statuses() {
+  return array(
+    'approved' => t('approved'),
+    'pending' => t('pending'),
+    'revoked' => t('revoked'),
+  );
+}
+
+/**
+ * Entity property getter callback for App's and API Product's user fields.
+ */
+function dp_hacks_entity_user_property_get($data, array $options, $name, $type, $info) {
+  if ($user = user_load_by_mail($data->{$name})) {
+    return $user->uid;
+  }
+  return NULL;
+}
+
+/**
+ * Entity property getter callback for App's and API Product's user fields.
+ */
+function dp_hacks_entity_user_property_get_raw($data, array $options, $name, $type, $info) {
+  return $data->{$name};
+}
+
+/**
+ * Entity property getter callback for App's and API Product's date fields.
+ */
+function dp_hacks_entity_date_property_get($data, array $options, $name, $type, $info) {
+  return floor($data->{$name} / 1000);
+}
+
+/**
+ * Entity property setter callback for App's and API Product's date fields.
+ */
+function dp_hacks_entity_date_property_set($data, array $options, $name, $type, $info) {
+  return $data->{$name} * 1000;
+}
+
+/**
+ * Helper function which returns API Products indexed by their names.
+ *
+ * @param \Apigee\ManagementAPI\APIProduct[] $products
+ *   Array of API Products.
+ *
+ * @return \Apigee\ManagementAPI\APIProduct[]
+ *   Array of API Products indexed by their names.
+ */
+function dp_hacks_return_api_products_indexed_by_name(array $products) {
+  return array_reduce($products, function ($result, $item) {
+    /** @var \Apigee\ManagementAPI\APIProduct $item */
+    $result[$item->getName()] = $item;
+    return $result;
+  }, array());
+}
+
+/**
+ * Helper function which returns API Models indexed by their uuids.
+ *
+ * @param \Apigee\SmartDocs\Model[] $models
+ *   Array of API Models.
+ *
+ * @return \Apigee\SmartDocs\Model[]
+ *   Array of API Models indexed by their uuids.
+ */
+function dp_hacks_return_api_models_indexed_by_uuid(array $models) {
+  return array_reduce($models, function ($result, $item) {
+    /** @var \Apigee\SmartDocs\Model $item */
+    $result[$item->getUuid()] = $item;
+    return $result;
+  }, array());
+}

@@ -1,0 +1,600 @@
+<?php
+
+/**
+ * @file
+ * Code for the DP App Dashboard feature.
+ */
+
+include_once 'dp_app_dashboard.features.inc';
+/**
+ * @file
+ * Module file for DP App Dashboard.
+ */
+
+use Apigee\ManagementAPI\AppDashboardDeveloperApp;
+use Apigee\ManagementAPI\Developer;
+use Apigee\ManagementAPI\DeveloperApp;
+use Apigee\Util\OrgConfig;
+use Drupal\devconnect_developer_apps\DeveloperAppEntity;
+
+define('DP_APP_DASHBOARD_VIEW_PATH', 'app-dashboard');
+define('DP_APP_DASHBOARD_REFRESH_TABLE_TOKEN', 'dp_app_dashboard_refresh');
+define('DP_APP_DASHBOARD_EDIT_APP_MODEL_TOKEN', 'dp_app_dashboard_edit_app_model');
+define('DP_APP_DASHBOARD_STATUS_APPROVED', 'approved');
+define('DP_APP_DASHBOARD_STATUS_PENDING', 'pending');
+define('DP_APP_DASHBOARD_STATUS_REVOKED', 'revoked');
+
+/**
+ * Implements hook_modules_installed().
+ */
+function dp_app_dashboard_modules_installed($modules) {
+  if (in_array('dp_app_dashboard', $modules)) {
+    // Let feature to revert itself when it gets installed.
+    features_revert_module('dp_app_dashboard');
+  }
+}
+
+/**
+ * Implements hook_menu().
+ */
+function dp_app_dashboard_menu() {
+  $items = array();
+
+  $items[DP_APP_DASHBOARD_VIEW_PATH . '/edit-app/%ctools_js/%/%/%'] = array(
+    'title' => 'App Dashboard',
+    'page callback' => 'dp_app_dashboard_modal_form',
+    'page arguments' => array(2, 3, 4, 5),
+    'access callback' => '_dp_app_dashboard_modal_form_access_callback',
+    'access arguments' => array(3, 4, 5),
+    'type' => MENU_CALLBACK,
+  );
+
+  $items[DP_APP_DASHBOARD_VIEW_PATH . '/refresh'] = array(
+    'page callback' => '_dp_app_dashboard_manage_app_keys_refresh',
+    'access callback' => '_dp_app_dashboard_manage_app_keys_refresh_access_callback',
+    'type' => MENU_CALLBACK,
+  );
+
+  return $items;
+}
+
+/**
+ * Access callback for app edit form.
+ *
+ * @param string $developer
+ *   Email address of the developer.
+ * @param string $appId
+ *   UUID of the app.
+ * @param string $api_product_name
+ *   Name of the API Product.
+ *
+ * @return bool
+ *   TRUE
+ *
+ * @see dp_app_dashboard_menu()
+ */
+function _dp_app_dashboard_modal_form_access_callback($developer, $appId, $api_product_name) {
+  if (!isset($_GET['token']) || !drupal_valid_token($_GET['token'], DP_APP_DASHBOARD_EDIT_APP_MODEL_TOKEN)) {
+    return FALSE;
+  }
+
+  // No, we can not use libraries_load(), because library not added that
+  // way.
+  $lib_path = libraries_get_path('mgmt-api-php-sdk');
+  include_once $lib_path . '/vendor/autoload.php';
+  $app = &drupal_static('dp_app_dashboard_modal_form_app_cache', NULL);
+  if (!$app) {
+    $app = new DeveloperApp(devconnect_default_org_config(), $developer);
+    try {
+      $app->loadByAppId($appId);
+
+      $app_assigned_to_this_api_product = FALSE;
+      // Validate that the app is actually assigned to the given API Product.
+      foreach ($app->getCredentialApiProducts() as $entry) {
+        if ($entry['apiproduct'] == $api_product_name) {
+          $app_assigned_to_this_api_product = TRUE;
+          break;
+        }
+      }
+      // Is somebody trying to do some nasty hack?
+      if (!$app_assigned_to_this_api_product) {
+        return FALSE;
+      }
+
+      // Pre-load the API Product object, because we are going to need that
+      // later.
+      $product = &drupal_static('dp_app_dashboard_modal_form_product_cache', NULL);
+      if (!$product) {
+        $products = entity_load('api_product', array($api_product_name));
+        if (!empty($products)) {
+          $product = reset($products);
+        }
+        else {
+          return FALSE;
+        }
+      }
+      return TRUE;
+    }
+    catch (Exception $e) {
+      // Exception means unauthorized access.
+      $app = NULL;
+      return FALSE;
+    }
+  }
+
+  return FALSE;
+}
+
+/**
+ * Access callback for refresh table page.
+ *
+ * @return bool
+ *   TRUE, if token is valid, otherwise FALSE.
+ */
+function _dp_app_dashboard_manage_app_keys_refresh_access_callback() {
+  return isset($_GET['token']) && drupal_valid_token($_GET['token'], DP_APP_DASHBOARD_REFRESH_TABLE_TOKEN);
+}
+
+/**
+ * Custom page callback.
+ *
+ * @see dp_app_dashboard_menu()
+ *
+ * TODO Deprecate this button and let cron to keep cached data in sync with the
+ * actual data on Edge.
+ */
+function _dp_app_dashboard_manage_app_keys_refresh() {
+  _dp_app_dashboard_reset_local_cache();
+  drupal_goto(DP_APP_DASHBOARD_VIEW_PATH);
+}
+
+/**
+ * Implements hook_devconnect_developer_app_save().
+ *
+ * FYI: hook_entity_insert() and hook_entity_update() are not an option, because
+ * DeveloperAppEntity does not extends EntityAPIControllerInterface().
+ */
+function dp_app_dashboard_devconnect_developer_app_save(array $results, array &$form_state) {
+  if ($results['code'] == 200 && isset($results['data']['appId'])) {
+    $apps = entity_load('developer_app', array($results['data']['appId']));
+    if (!empty($apps)) {
+      /** @var DeveloperAppEntity $app */
+      $app = reset($apps);
+      if ($app) {
+        $config = devconnect_default_org_config();
+        $dev_app = new DeveloperApp($config, $results['data']['email']);
+        $dev_app->fromArray((array) $app);
+        try {
+          dp_app_dashboard_save_app_to_cache($dev_app, $config);
+        }
+        catch (Exception $e) {
+          watchdog_exception(__FUNCTION__, $e, 'App cannot be saved to the local app dashboard cache. !message <pre>@app</pre>', array('@app' => print_r($app, TRUE)));
+        }
+      }
+    }
+  }
+  return TRUE;
+}
+
+/**
+ * Implements hook_devconnect_developer_app_delete().
+ *
+ * FYI: hook_entity_delete() is not an option, because DeveloperAppEntity
+ * does not extends EntityAPIControllerInterface().
+ */
+function dp_app_dashboard_devconnect_developer_app_delete(array $results, array &$form_state) {
+  if ($results['code'] == 200 && isset($results['data']['appId'])) {
+    try {
+      db_delete('dp_app_dashboard')
+        ->condition('app_id', $results['data']['appId'])
+        ->execute();
+    }
+    catch (Exception $e) {
+      watchdog_exception(__FUNCTION__, $e, 'App cannot be removed from the local app dashboard cache. !message <pre>@app</pre>', array('@app' => print_r($results['data'], TRUE)));
+    }
+  }
+  return TRUE;
+}
+
+/**
+ * Reset locally cached application data.
+ *
+ * @throws \Exception
+ */
+function _dp_app_dashboard_reset_local_cache() {
+  $config = devconnect_default_org_config();
+  $transaction = db_transaction(__FUNCTION__);
+  try {
+    db_truncate('dp_app_dashboard')->execute();
+    $developer = new Developer($config);
+    $developers = $developer->loadAllDevelopers();
+    /** @var Developer $developer */
+    foreach ($developers as $developer) {
+      $dev_app = new DeveloperApp($config, $developer);
+      $developer_apps = $dev_app->getListDetail();
+      /** @var \Apigee\ManagementAPI\DeveloperApp $app */
+      foreach ($developer_apps as $app) {
+        dp_app_dashboard_save_app_to_cache($app, $config);
+      }
+    }
+  }
+  catch (Exception $e) {
+    $transaction->rollback();
+    watchdog_exception(__FUNCTION__, $e, 'App dashboard local cache update issue. !message');
+    drupal_set_message(t('Something went wrong, please try again!'), 'error');
+  }
+}
+
+/**
+ * Insert or update an app in the App Dashboard's local cache.
+ *
+ * @param \Apigee\ManagementAPI\DeveloperApp $app
+ *   Developer App.
+ * @param OrgConfig $org_config
+ *   Organisation config.
+ *
+ * @throws \Exception
+ *   When db_delete() or db_insert() fails.
+ */
+function dp_app_dashboard_save_app_to_cache(DeveloperApp $app, OrgConfig $org_config = NULL) {
+  if ($org_config) {
+    $org_config = devconnect_default_org_config();
+  }
+  // Get status of each API Products.
+  $statuses = array_reduce($app->getCredentialApiProducts(), function ($result, $item) {
+    $result[$item['apiproduct']] = $item['status'];
+    return $result;
+  }, array());
+
+  if ($app->getCredentialExpiryDate() == -1) {
+    $credential_expiry = 2144000000;
+  }
+  else {
+    $credential_expiry = round($app->getCredentialExpiryDate() / 1000);
+  }
+
+  $transaction = db_transaction(__FUNCTION__ . '_' . preg_replace('/\W/', '_', $app->getName()));
+  // Drop all matching apps first to ensure data consistency.
+  // Ex.: without this, if an app's API Product assignment changes, all
+  // entries which belongs to a removed API Product would remain intact
+  // in this table.
+  try {
+    db_delete('dp_app_dashboard')
+      ->condition('app_id', $app->getAppId())
+      ->condition('org_name', $org_config->orgName)
+      ->execute();
+  }
+  catch (Exception $e) {
+    watchdog_exception(__FUNCTION__, $e, 'App can not be removed from the local app dashboard cache. <pre>@app</pre>', array('@app' => print_r($app, TRUE)));
+    $transaction->rollback();
+    throw $e;
+  }
+
+  foreach ($app->getApiProducts() as $product) {
+    $fields = array(
+      'name' => $app->getName(),
+      'app_id' => $app->getAppId(),
+      'email' => $app->getDeveloperMail(),
+      'display_name' => $app->getAttribute('DisplayName'),
+      'consumer_key' => $app->getConsumerKey(),
+      'consumer_secret' => $app->getConsumerSecret(),
+      'overall_status' => $app->getOverallStatus(),
+      'app_status' => $statuses[$product],
+      'credential_status' => $app->getCredentialStatus(),
+      'created_at' => round($app->getCreatedAt() / 1000),
+      'modified_at' => round($app->getModifiedAt() / 1000),
+      'org_name' => $org_config->orgName,
+      'api_product' => $product,
+      'key_expiry' => $app->getKeyExpiry(),
+      'credential_expiry' => $credential_expiry,
+      'app_status_modified_by' => $app->getAttribute(_dp_app_dashboard_get_app_status_modified_by_attribute_name_for_this_api_product($product)),
+    );
+    drupal_alter('dp_app_dashboard_cached_data', $fields, $app, $product);
+    try {
+      db_insert('dp_app_dashboard')->fields($fields)->execute();
+    }
+    catch (Exception $e) {
+      watchdog_exception(__FUNCTION__, $e, 'App can not be saved to the local app dashboard cache. !message <pre>@app</pre>', array('@app' => print_r($fields, TRUE)));
+      $transaction->rollback();
+      throw $e;
+    }
+  }
+}
+
+/**
+ * Helper function which generates unique "modified by" attribute name.
+ *
+ * @param string $api_product_name
+ *   Name of the Edge API Product.
+ *
+ * @return string
+ */
+function _dp_app_dashboard_get_app_status_modified_by_attribute_name_for_this_api_product($api_product_name) {
+  $name = 'app_status_of_';
+  $name .= str_replace(' ', '_', strtolower($api_product_name));
+  $name .= '_modified_by';
+  return $name;
+}
+
+/**
+ * Custom access callback to render App edit form in a Ctools modal form.
+ *
+ * @param string $developer
+ *   E-mail address of the developer.
+ * @param string $app_id
+ *   UUID of the Developer App.
+ * @param int $api_product_name
+ *   Name of the API Product.
+ *
+ * @return array|null
+ *   Form array, if JS disabled.
+ *
+ * @see dp_app_dashboard_menu()
+ */
+function dp_app_dashboard_modal_form($js = NULL, $developer, $app_id, $api_product_name) {
+  // Try to get the pre-loaded App & API Product from the access callback.
+  // @see _dp_app_dashboard_modal_form_access_callback()
+  /** @var DeveloperApp $app */
+  $app = &drupal_static('dp_app_dashboard_modal_form_app_cache', NULL);
+  $product = &drupal_static('dp_app_dashboard_modal_form_product_cache', NULL);
+
+  if (!$app) {
+    $app = new DeveloperApp(devconnect_default_org_config(), $developer);
+    try {
+      $app->loadByAppId($app_id);
+    }
+    catch (Exception $e) {
+      // Exception means unauthorized access anyway.
+      // Should have never happened!
+      $output = ctools_modal_command_display(t('Error'), t('Something went wrong, please try again!'));
+      print ajax_render($output);
+      drupal_exit();
+    }
+  }
+
+  if (!$product) {
+    $products = entity_load('api_product', array($api_product_name));
+    if (!empty($products)) {
+      $product = reset($products);
+    }
+    else {
+      $output = ctools_modal_command_display(t('Error'), t('Something went wrong, please try again!'));
+      print ajax_render($output);
+      drupal_exit();
+    }
+  }
+
+  $form_state = array(
+    'title' => check_plain($app->getAttribute('DisplayName')),
+    'ajax' => TRUE,
+    'build_info' => array(
+      'args' => array(
+        'app' => $app,
+        'api_product' => $product,
+      ),
+    ),
+  );
+  // Fall back, if Javascript disabled..
+  if (!$js) {
+    return drupal_get_form('dp_app_dashboard_app_edit_form', $form_state['build_info']['args']);
+  }
+
+  ctools_include('modal');
+  ctools_include('ajax');
+
+  $output = ctools_modal_form_wrapper('dp_app_dashboard_app_edit_form', $form_state);
+
+  // If the form has been submitted, there may be additional instructions
+  // such as dismissing the modal popup.
+  if (!empty($form_state['ajax_commands'])) {
+    $output = $form_state['ajax_commands'];
+  }
+
+  print ajax_render($output);
+  drupal_exit();
+}
+
+/**
+ * Custom app edit form.
+ */
+function dp_app_dashboard_app_edit_form($form, $form_state) {
+  $form = array();
+  // Hack for disabled Javascript.
+  if (isset($form_state['build_info']['args'][0])) {
+    $form_state['build_info']['args'] = $form_state['build_info']['args'][0];
+  }
+  if ($form_state['build_info']['args']['app'] != NULL && $form_state['build_info']['args']['api_product'] != NULL) {
+    /** @var \Drupal\devconnect_developer_apps\ApiProductEntity $product */
+    $product = $form_state['build_info']['args']['api_product'];
+    $status = FALSE;
+
+    foreach ($form_state['build_info']['args']['app']->getCredentialApiProducts() as $entry) {
+      if ($entry['apiproduct'] == $product->name) {
+        $status = $entry['status'];
+        break;
+      }
+    }
+
+    if (!$status) {
+      drupal_set_message(t('Something went wrong, please try again!'), 'error');
+      watchdog(__FUNCTION__, 'Status of credentials for @product API Product cannot be determined. <pre>@app</pre>', array('@product' => $form_state['build_info']['args']['api_product']->name, '@app' => print_r($form_state['build_info']['args']['app'], TRUE)), WATCHDOG_ERROR);
+      return $form;
+    }
+
+    if ($status == DP_APP_DASHBOARD_STATUS_PENDING || $status == DP_APP_DASHBOARD_STATUS_REVOKED) {
+      $form['app_status_box'] = array(
+        '#prefix' => theme('html_tag', array(
+          'element' => array(
+            '#type' => 'html_tag',
+            '#tag' => 'label',
+            '#value' => t("App's credentials for %product API Product are currently in @status state.", array(
+              '%product' => $product->displayName,
+              '@status' => $status == DP_APP_DASHBOARD_STATUS_PENDING ? t('pending') : t('revoked'),
+            )),
+          ),
+        )),
+        '#type' => 'checkbox',
+        '#title' => t("Approve app's credentials for for this API Product"),
+      );
+    }
+    elseif ($status == DP_APP_DASHBOARD_STATUS_APPROVED) {
+      $form['app_status_box_reject'] = array(
+        '#prefix' => theme('html_tag', array(
+          'element' => array(
+            '#type' => 'html_tag',
+            '#tag' => 'label',
+            '#value' => t("App's credentials for %product API Product are currently in approved state.", array(
+              '%product' => $product->displayName,
+            )),
+          ),
+        )),
+        '#type' => 'checkbox',
+        '#title' => t("Revoke app's credentials for this API Product"),
+      );
+    }
+
+    $form['actions']['submit'] = array(
+      '#type' => 'submit',
+      '#value' => t('Confirm'),
+    );
+  }
+  else {
+    drupal_set_message(t('Something went wrong, please try again!'), 'error');
+    watchdog(__FUNCTION__, 'App or API Product is missing from form arguments. <pre>@args</pre>', array('@args' => print_r($form_state['build_info']['args'], TRUE)), WATCHDOG_ERROR);
+  }
+
+  return $form;
+}
+
+/**
+ * Submit handler for dp_app_dashboard_app_edit_form.
+ *
+ * @see dp_app_dashboard_app_edit_form()
+ */
+function dp_app_dashboard_app_edit_form_submit($form, &$form_state) {
+  global $user;
+  $fields = array();
+  // No JS hack.
+  if (isset($form_state['build_info']['args'][0])) {
+    $form_state['build_info']['args'] = $form_state['build_info']['args'][0];
+  }
+  // We probably should work with the entity, instead off the DeveloperApp
+  // itself, so it's time to load it.
+  /** @var DeveloperAppEntity $app */
+  $app = new DeveloperAppEntity($form_state['build_info']['args']['app']->toArray());
+  $appdapp = new AppDashboardDeveloperApp(devconnect_default_org_config(), $app->developer);
+  $appdapp->fromArray($form_state['build_info']['args']['app']->toArray());
+
+  if (isset($form_state['values']['app_status_box']) && $form_state['values']['app_status_box']) {
+    $fields['app_status'] = DP_APP_DASHBOARD_STATUS_APPROVED;
+  }
+  elseif (isset($form_state['values']['app_status_box_reject']) && $form_state['values']['app_status_box_reject']) {
+    $fields['app_status'] = DP_APP_DASHBOARD_STATUS_REVOKED;
+  }
+
+  // Status of the app actually changed.
+  if (!empty($fields)) {
+    $success = FALSE;
+
+    try {
+      $appdapp->setAPIProductKeyStatus($form_state['build_info']['args']['api_product']->name, rtrim($fields['app_status'], 'd'));
+      try {
+        $app->attributes[_dp_app_dashboard_get_app_status_modified_by_attribute_name_for_this_api_product($form_state['build_info']['args']['api_product']->name)] = $fields['app_status_modified_by'] = $user->mail;
+        $success = $app->save();
+        if ($success) {
+          $db_update_success = db_update('dp_app_dashboard')
+            ->fields($fields)
+            ->condition('app_id', $form_state['build_info']['args']['app']->getAppId())
+            ->condition('api_product', $form_state['build_info']['args']['api_product']->name)
+            ->execute();
+
+          // Only local db update failed.
+          // Reset locally cached data to ensure consistency.
+          if (!$db_update_success) {
+            _dp_app_dashboard_reset_local_cache();
+          }
+
+          // Trigger rules event, if Rules module enabled.
+          if (module_exists('rules')) {
+            rules_invoke_event('dp_app_dashboard_app_credentials_' . $fields['app_status'], $app, $form_state['build_info']['args']['api_product']);
+          }
+        }
+      }
+      catch (Exception $e) {
+        watchdog_exception(__FUNCTION__, $e, 'App dashboard update problem: !message.');
+      }
+    }
+    catch (Exception $e) {
+      $message = $e->getMessage();
+      if ($e instanceof \Apigee\Exceptions\ResponseException) {
+        $message = $e;
+      }
+      watchdog_exception(__FUNCTION__, $e, "Developer app's credentials for @product API Product cannot be @action. Reason: @message.", array(
+        '@product' => $form_state['build_info']['args']['api_product']->name,
+        '@action' => $fields['app_status'],
+        '@message' => $message,
+      ));
+    }
+
+    if ($success) {
+      drupal_set_message(t('%string app successfully updated.', array('%string' => $app->getAttribute('DisplayName'))));
+    }
+    else {
+      drupal_set_message(t('Unexpected error occurred while tried to update the %string app. Please try again.', array('%string' => $app->getAttribute('DisplayName'))), 'error');
+    }
+  }
+
+  if (isset($form_state['ajax']) && $form_state['ajax']) {
+    // Reload this page after a successful AJAX submit.
+    $form_state['ajax_commands'] = array(ctools_ajax_command_redirect(DP_APP_DASHBOARD_VIEW_PATH));
+  }
+}
+
+/**
+ * Implements hook_views_pre_view().
+ */
+function dp_app_dashboard_views_pre_view(&$view, &$display_id, &$args) {
+  if ($view->name == 'dp_app_dashboard') {
+    dp_app_dashboard_add_refresh_button_to_view($view, $display_id);
+  }
+}
+
+/**
+ * Helper function which adds "Refresh table" button to a view.
+ *
+ * If we needed to customize the original App dashboard view, then we could use
+ * this function to add this button to the forked view.
+ *
+ * @param view $view
+ *   View object.
+ * @param string $display_id
+ *   Display id.
+ */
+function dp_app_dashboard_add_refresh_button_to_view(view $view, $display_id) {
+  $link = l(t('Refresh table'), DP_APP_DASHBOARD_VIEW_PATH . '/refresh', array(
+    'query' => array(
+      'token' => drupal_get_token(DP_APP_DASHBOARD_REFRESH_TABLE_TOKEN),
+      'destination' => current_path(),
+    ),
+    'attributes' => array(
+      'class' => array(
+        'btn',
+        'btn-default',
+        'glyphicon',
+        'glyphicon-refresh',
+        'pull-right',
+      ),
+    ),
+  ));
+  $view->add_item($display_id, 'header', 'views', 'area', array(
+    'content' => $link,
+    'format' => 'full_html',
+  ));
+}
+
+/**
+ * Implements hook_views_api_alter().
+ */
+function dp_app_dashboard_views_api_alter(&$list) {
+  $list['dp_app_dashboard']['path'] = drupal_get_path('module', 'dp_app_dashboard') . '/views';
+}
